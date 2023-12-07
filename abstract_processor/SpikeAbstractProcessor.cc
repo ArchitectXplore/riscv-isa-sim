@@ -19,7 +19,7 @@ void SpikeAbstractProcessor::set_clint(const reg_t& idx, const reg_t& pc) {
 }
 
 // * state if
-void SpikeAbstractProcessor::reset() const {
+void SpikeAbstractProcessor::reset_state() const {
 }
 
 void SpikeAbstractProcessor::get_pc(reg_t& ret) const {
@@ -69,6 +69,9 @@ void setException(SpikeInstr::PtrType ptr, trap_t& t){
     excepPtr->ecause = t.cause();
 }
 
+void SpikeAbstractProcessor::reset() const{
+    _processor->reset();
+}
 void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) const {
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     try{
@@ -97,6 +100,7 @@ void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     try{
         auto fetch = _processor->mmu->access_icache(ptr->pc)->data;
+        ptr->instr_raw = fetch.insn.bits();
         ptr->instr_func = fetch.func;
         return;
     }
@@ -153,7 +157,6 @@ bool SpikeAbstractProcessor::mmio_store(reg_t paddr, size_t len, const uint8_t* 
 }
 // Callback for processors to let the simulation know they were reset.
 void SpikeAbstractProcessor::proc_reset(unsigned id){
-    throw "unimpl!";
 }
 
 const cfg_t& SpikeAbstractProcessor::get_cfg() const{
