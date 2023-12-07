@@ -9,21 +9,34 @@ public:
     using ExceptionBase::valid;
     using PtrType = std::shared_ptr<SpikeException>;
     reg_t ExceptionBase::ecause;
-    trap_t trap;
+    trap_t trap{0};
+    SpikeException(){}
 };
 
 class SpikeInstr: public InstrBase{
 public:
     using InstrBase::pc;
     using InstrBase::instr_raw;
+    using InstrBase::exception;
     using PtrType = std::shared_ptr<SpikeInstr>;
     insn_func_t instr_func;
+    SpikeInstr(const reg_t& pc){
+        this->pc = pc;
+        this->exception = std::make_shared<SpikeException>();
+    }
+    static SpikeInstr::PtrType createInstr(const reg_t& pc){
+        return std::make_shared<SpikeInstr>(pc);
+    }
 };
 class SpikeResult: public ExeResultBase{
 public:
     using PtrType = std::shared_ptr<SpikeResult>;
     using ExeResultBase::npc;
     using ExeResultBase::result_val;
+    SpikeResult() = default;
+    static SpikeResult::PtrType createResult(){
+        return std::make_shared<SpikeResult>();
+    }
 };
 class SpikeAbstractProcessor: public AbstractProcessorBase, public simif_t{
 private:
@@ -41,9 +54,27 @@ public:
                          AbstractProcessorBase(uncore)
     {
         _harts[0] = _processor.get();
+        debug_mmu = new mmu_t(this, cfg->endianness, nullptr);
     }
     ~SpikeAbstractProcessor(){
+        delete debug_mmu;
     }
+    void setSerialized(const bool& flag){_processor->state.serialized = flag;}
+    void advancePc(archXplore::SpikeResult::PtrType resultPtr){
+        if (unlikely(resultPtr->npc & 1 == 1)) { 
+            std::cout << "problem npc: " << resultPtr->npc << std::endl;
+            switch (resultPtr->npc) { 
+                case 3: _processor->state.serialized = true;break; // PC_SERIALIZE_BEFORE
+                case 5: break;  //PC_SERIALIZE_AFTER
+                default: abort(); 
+            } 
+            resultPtr->npc = _processor->state.pc;
+            // break; 
+        } else { 
+            _processor->state.pc = resultPtr->npc; 
+        }
+    }
+    // * from AbstractProcessorBase
     virtual void sendMemReq(MemReq::PtrType)  override final;
     virtual void recieveMemResp(MemResp::PtrType)  override final;
     virtual void accessMemNoEffect(MemReq::PtrType, MemResp::PtrType)  override final;
@@ -53,7 +84,7 @@ public:
 
 
     // state if
-    virtual void reset() const  override final;
+    virtual void reset_state() const override final;
 
     virtual void get_pc(reg_t& ret) const override final;
     virtual void set_pc(const reg_t& pc) override final;
@@ -69,11 +100,8 @@ public:
     virtual void set_csr(const reg_t& idx, const reg_t& val)  override final;
     virtual void try_set_csr(const reg_t& idx, reg_t& val) const noexcept  override final;
 
-
-
-
-
     // exe if
+    virtual void reset() const override final;
     virtual void decode(InstrBase::PtrType instr) const  override final;  
     virtual void execute(InstrBase::PtrType instr, ExeResultBase::PtrType exe_result) const  override final; 
     virtual void fetch(InstrBase::PtrType instr) const override final;

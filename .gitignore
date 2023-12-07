@@ -10,3 +10,7 @@ autom4te.cache/
 # playground
 spikebuild/
 # abstract_processor
+isatest/
+.vscode/
+log.txt
+gitpatch

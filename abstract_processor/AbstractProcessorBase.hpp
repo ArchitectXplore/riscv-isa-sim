@@ -47,7 +47,7 @@ public:
 
 
     // state if
-    virtual void reset() const = 0;
+    virtual void reset_state() const = 0;
 
     virtual void get_pc(reg_t& ret) const = 0;
     virtual void set_pc(const reg_t& pc) = 0;
@@ -66,6 +66,7 @@ public:
 
 
     // exe if
+    virtual void reset() const = 0;
     virtual void decode(InstrBase::PtrType instr) const = 0;  
     virtual void execute(InstrBase::PtrType instr, ExeResultBase::PtrType exe_result) const = 0;
     virtual void fetch(InstrBase::PtrType instr) const = 0;
