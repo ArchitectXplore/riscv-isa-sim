@@ -11,3 +11,7 @@ autom4te.cache/
 spikebuild/
 # abstract_processor
 isatest/
+.vscode/
+log.txt
+gitpatch
+
