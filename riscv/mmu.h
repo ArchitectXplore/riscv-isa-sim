@@ -20,7 +20,9 @@
 const reg_t PGSIZE = 1 << PGSHIFT;
 const reg_t PGMASK = ~(PGSIZE-1);
 #define MAX_PADDR_BITS 56 // imposed by Sv39 / Sv48
-
+namespace archXplore{
+  class SpikeAbstractProcessor;
+}
 struct insn_fetch_t
 {
   insn_func_t func;
@@ -495,6 +497,7 @@ private:
   triggers::matched_t *matched_trigger;
 
   friend class processor_t;
+  friend class archXplore::SpikeAbstractProcessor;
 };
 
 struct vm_info {

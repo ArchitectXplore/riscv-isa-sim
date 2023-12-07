@@ -7,3 +7,6 @@ autom4te.cache/
 .gdb_history
 .#*
 *~
+# playground
+spikebuild/
+# abstract_processor

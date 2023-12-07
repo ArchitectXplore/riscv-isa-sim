@@ -19,7 +19,9 @@
 #include "vector_unit.h"
 
 #define N_HPMCOUNTERS 29
-
+namespace archXplore{
+  class SpikeAbstractProcessor;
+}
 class processor_t;
 class mmu_t;
 typedef reg_t (*insn_func_t)(processor_t*, insn_t, reg_t);
@@ -353,6 +355,7 @@ private:
   friend class clint_t;
   friend class plic_t;
   friend class extension_t;
+  friend class archXplore::SpikeAbstractProcessor;
 
   void parse_varch_string(const char*);
   void parse_priv_string(const char*);
