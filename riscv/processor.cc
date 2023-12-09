@@ -1029,7 +1029,7 @@ reg_t processor_t::get_csr(int which, insn_t insn, bool write, bool peek)
   // illegal-instruction exceptions, not virtual-instruction exceptions.
   throw trap_illegal_instruction(insn.bits());
 }
-
+#ifndef ARCHXPLORE_WBSPLIT
 reg_t illegal_instruction(processor_t UNUSED *p, insn_t insn, reg_t UNUSED pc)
 {
   // The illegal instruction can be longer than ILEN bits, where the tval will
@@ -1037,6 +1037,15 @@ reg_t illegal_instruction(processor_t UNUSED *p, insn_t insn, reg_t UNUSED pc)
   // ILEN to 32 bits since all official instructions have at most 32 bits.
   throw trap_illegal_instruction(insn.bits() & 0xffffffffULL);
 }
+#else //ARCHXPLORE_WBSPLIT
+reg_t illegal_instruction(processor_t UNUSED *p, insn_t insn, reg_t UNUSED pc, ResultWB& resultwb)
+{
+  // The illegal instruction can be longer than ILEN bits, where the tval will
+  // contain the first ILEN bits of the faulting instruction. We hard-code the
+  // ILEN to 32 bits since all official instructions have at most 32 bits.
+  throw trap_illegal_instruction(insn.bits() & 0xffffffffULL);
+}
+#endif //ARCHXPLORE_WBSPLIT
 
 insn_func_t processor_t::decode_insn(insn_t insn)
 {
@@ -1121,7 +1130,7 @@ void processor_t::register_base_instructions()
   #define DECLARE_OVERLAP_INSN(name, ext) { name##_supported = isa->extension_enabled(ext); }
   #include "overlap_list.h"
   #undef DECLARE_OVERLAP_INSN
-
+  #ifndef ARCHXPLORE_WBSPLIT
   #define DEFINE_INSN(name) \
     extern reg_t fast_rv32i_##name(processor_t*, insn_t, reg_t); \
     extern reg_t fast_rv64i_##name(processor_t*, insn_t, reg_t); \
@@ -1144,6 +1153,30 @@ void processor_t::register_base_instructions()
         logged_rv32e_##name, \
         logged_rv64e_##name}); \
     }
+  #else // ARCHXPLORE_WBSPLIT
+  #define DEFINE_INSN(name) \
+    extern reg_t fast_rv32i_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t fast_rv64i_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t fast_rv32e_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t fast_rv64e_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t logged_rv32i_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t logged_rv64i_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t logged_rv32e_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    extern reg_t logged_rv64e_##name(processor_t*, insn_t, reg_t, ResultWB&); \
+    if (name##_supported) { \
+      register_insn((insn_desc_t) { \
+        name##_match, \
+        name##_mask, \
+        fast_rv32i_##name, \
+        fast_rv64i_##name, \
+        fast_rv32e_##name, \
+        fast_rv64e_##name, \
+        logged_rv32i_##name, \
+        logged_rv64i_##name, \
+        logged_rv32e_##name, \
+        logged_rv64e_##name}); \
+    }
+  #endif // ARCHXPLORE_WBSPLIT
   #include "insn_list.h"
   #undef DEFINE_INSN
 

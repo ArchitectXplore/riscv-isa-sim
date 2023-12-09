@@ -24,14 +24,31 @@ namespace archXplore{
 }
 class processor_t;
 class mmu_t;
+#ifndef ARCHXPLORE_WBSPLIT
 typedef reg_t (*insn_func_t)(processor_t*, insn_t, reg_t);
+#else //ARCHXPLORE_WBSPLIT
+struct CsrResult{
+	reg_t target;
+	reg_t val;
+};
+using CsrResultVec = std::vector<CsrResult>;
+struct ResultWB{
+	std::optional<reg_t> xresult = std::nullopt;
+	std::optional<freg_t> fresult = std::nullopt;
+	CsrResultVec csrresult;
+};
+typedef reg_t (*insn_func_t)(processor_t*, insn_t, reg_t, ResultWB& resultwb);
+#endif
 class simif_t;
 class trap_t;
 class extension_t;
 class disassembler_t;
 
+#ifndef ARCHXPLORE_WBSPLIT
 reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc);
-
+#else // ARCHXPLORE_WBSPLIT
+reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb);
+#endif // ARCHXPLORE_WBSPLIT
 struct insn_desc_t
 {
   insn_bits_t match;

@@ -62,11 +62,10 @@ void SpikeAbstractProcessor::try_set_csr(const reg_t& idx, reg_t& val) const noe
 
 
 // * exe if
-void setException(SpikeInstr::PtrType ptr, trap_t& t){
-    auto excepPtr = std::dynamic_pointer_cast<SpikeException>(ptr->exception);
-    excepPtr->valid = true;
-    excepPtr->trap = t;
-    excepPtr->ecause = t.cause();
+inline void setException(SpikeInstr::PtrType ptr, trap_t& t){
+    ptr->evalid = true;
+    ptr->trap = t.clone();
+    ptr->ecause = t.cause();
 }
 
 void SpikeAbstractProcessor::reset() const{
@@ -83,11 +82,18 @@ void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) const {
     }
     return;
 }  
-void SpikeAbstractProcessor::execute(InstrBase::PtrType instr, ExeResultBase::PtrType exe_result) const {
+void SpikeAbstractProcessor::execute(InstrBase::PtrType instr) const {
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    auto result = std::dynamic_pointer_cast<SpikeResult>(exe_result);
     try{
-        result->npc = ptr->instr_func(_processor.get(), ptr->instr_raw, ptr->pc);
+        std::optional<reg_t> xresult = std::nullopt;
+        std::optional<freg_t> fresult = std::nullopt;
+#ifndef ARCHXPLORE_WBSPLIT
+        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc);
+#else // ARCHXPLORE_WBSPLIT
+        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc, ptr->resultwb);
+#endif // ARCHXPLORE_WBSPLIT
+        if(ptr->pc == 0xd1010140)
+            std::cout << std::hex << ptr->npc << std::endl;
         return;
     }
     catch(trap_t& t){
@@ -101,6 +107,7 @@ void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr) const{
     try{
         auto fetch = _processor->mmu->access_icache(ptr->pc)->data;
         ptr->instr_raw = fetch.insn.bits();
+        ptr->instr = fetch.insn;
         ptr->instr_func = fetch.func;
         return;
     }
@@ -114,13 +121,25 @@ void SpikeAbstractProcessor::ptw(InstrBase::PtrType instr) const{
 }
 void SpikeAbstractProcessor::handleExceptions(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    auto excepPtr = std::dynamic_pointer_cast<SpikeException>(ptr->exception);
-    if(!excepPtr->valid) return;
-    _processor->take_trap(excepPtr->trap, ptr->pc);
-    auto match = _processor->TM.detect_trap_match(excepPtr->trap);
+    if(!ptr->evalid) return;
+    std::cout << "get exception " << std::hex << ptr->ecause << std::endl;
+    _processor->take_trap(*(ptr->trap), ptr->pc);
+    auto match = _processor->TM.detect_trap_match(*(ptr->trap));
     if (match.has_value())
         _processor->take_trigger_action(match->action, 0, _processor->state.pc, 0);
     return;
+}
+void SpikeAbstractProcessor::writeBack(InstrBase::PtrType instr) const{
+#ifdef ARCHXPLORE_WBSPLIT
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    if(ptr->resultwb.xresult != std::nullopt && ptr->resultwb.fresult != std::nullopt)
+        throw "xresult and fresult can not be BOTH valid";
+    if(ptr->resultwb.xresult != std::nullopt)
+        _processor->state.XPR.write(ptr->instr.rd(), ptr->resultwb.xresult.value());
+    if(ptr->resultwb.fresult != std::nullopt)
+        _processor->state.FPR.write(ptr->instr.rd(), ptr->resultwb.fresult.value());
+    return;
+#endif // ARCHXPLORE_WBSPLIT
 }
 
 

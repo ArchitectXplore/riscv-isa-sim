@@ -22,19 +22,30 @@
 #define RS2 READ_REG(insn.rs2())
 #define RS3 READ_REG(insn.rs3())
 #define WRITE_RD(value) WRITE_REG(insn.rd(), value)
-
+#ifdef ARCHXPLORE_WBSPLIT
+#endif // ARCHXPLORE_WBSPLIT
 /* 0 : int
  * 1 : floating
  * 2 : vector reg
  * 3 : vector hint
  * 4 : csr
  */
+#ifndef ARCHXPLORE_WBSPLIT
 #define WRITE_REG(reg, value) ({ \
     reg_t wdata = (value); /* value may have side effects */ \
     if (DECODE_MACRO_USAGE_LOGGED) STATE.log_reg_write[(reg) << 4] = {wdata, 0}; \
     CHECK_REG(reg); \
     STATE.XPR.write(reg, wdata); \
   })
+#else // ARCHXPLORE_WBSPLIT
+#define WRITE_REG(reg, value) ({ \
+    reg_t wdata = (value); /* value may have side effects */ \
+    if (DECODE_MACRO_USAGE_LOGGED) STATE.log_reg_write[(reg) << 4] = {wdata, 0}; \
+    CHECK_REG(reg); \
+    resultwb.xresult = value; \
+  })
+#endif // ARCHXPLORE_WBSPLIT
+
 #define WRITE_FREG(reg, value) ({ \
     freg_t wdata = freg(value); /* value may have side effects */ \
     if (DECODE_MACRO_USAGE_LOGGED) STATE.log_reg_write[((reg) << 4) | 1] = wdata; \
@@ -79,10 +90,16 @@
 #define FRS3_H READ_FREG_H(insn.rs3())
 #define FRS3_F READ_FREG_F(insn.rs3())
 #define FRS3_D READ_FREG_D(insn.rs3())
+
 #define dirty_fp_state  STATE.sstatus->dirty(SSTATUS_FS)
 #define dirty_ext_state STATE.sstatus->dirty(SSTATUS_XS)
 #define dirty_vs_state  STATE.sstatus->dirty(SSTATUS_VS)
+
+#ifndef ARCHXPLORE_WBSPLIT
 #define DO_WRITE_FREG(reg, value) (STATE.FPR.write(reg, value), dirty_fp_state)
+#else // ARCHXPLORE_WBSPLIT
+#define DO_WRITE_FREG(reg, value) (resultwb.fresult = value, dirty_fp_state)
+#endif // ARCHXPLORE_WBSPLIT
 #define WRITE_FRD(value) WRITE_FREG(insn.rd(), value)
 #define WRITE_FRD_H(value) \
 do { \

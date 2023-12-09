@@ -160,7 +160,12 @@ inline void processor_t::update_histogram(reg_t pc)
 // These two functions are expected to be inlined by the compiler separately in
 // the processor_t::step() loop. The logged variant is used in the slow path
 static inline reg_t execute_insn_fast(processor_t* p, reg_t pc, insn_fetch_t fetch) {
+#ifndef ARCHXPLORE_WBSPLIT
   return fetch.func(p, fetch.insn, pc);
+#else // ARCHXPLORE_WBSPLIT
+  throw "execute_insn_fast in execute.cc should not be called";
+  return 0xdeadbeaf;
+#endif // ARCHXPLORE_WBSPLIT
 }
 static inline reg_t execute_insn_logged(processor_t* p, reg_t pc, insn_fetch_t fetch)
 {
@@ -172,7 +177,12 @@ static inline reg_t execute_insn_logged(processor_t* p, reg_t pc, insn_fetch_t f
   reg_t npc;
 
   try {
-    npc = fetch.func(p, fetch.insn, pc);
+#ifndef ARCHXPLORE_WBSPLIT
+  return npc = fetch.func(p, fetch.insn, pc);
+#else // ARCHXPLORE_WBSPLIT
+  throw "execute_insn_logged in execute.cc should not be called";
+  npc = 0xdeadbeaf;
+#endif // ARCHXPLORE_WBSPLIT
     if (npc != PC_SERIALIZE_BEFORE) {
       if (p->get_log_commits_enabled()) {
         commit_log_print_insn(p, pc, fetch.insn);

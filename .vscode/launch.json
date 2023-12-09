@@ -5,7 +5,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "/work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/build/playground/playground_main",
-            "args": [],
+            "args": [
+                "rv64ui-v-addi",
+            ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

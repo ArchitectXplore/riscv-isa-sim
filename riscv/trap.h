@@ -6,6 +6,7 @@
 #include "decode.h"
 #include "encoding.h"
 #include <string>
+#include <memory>
 
 struct state_t;
 
@@ -36,6 +37,10 @@ class trap_t
 
   virtual ~trap_t() = default;
 
+  virtual std::unique_ptr<trap_t> clone() const {
+    return std::make_unique<trap_t>(*this);
+  };
+
  private:
   reg_t which;
 };
@@ -48,6 +53,9 @@ class insn_trap_t : public trap_t
   bool has_gva() override { return gva; }
   bool has_tval() override { return true; }
   reg_t get_tval() override { return tval; }
+  virtual std::unique_ptr<trap_t> clone() const override {
+    return std::make_unique<insn_trap_t>(*this);
+  };
  private:
   bool gva;
   reg_t tval;
@@ -65,6 +73,9 @@ class mem_trap_t : public trap_t
   reg_t get_tval2() override { return tval2; }
   bool has_tinst() override { return true; }
   reg_t get_tinst() override { return tinst; }
+  virtual std::unique_ptr<trap_t> clone() const override {
+    return std::make_unique<mem_trap_t>(*this);
+  };
  private:
   bool gva;
   reg_t tval, tval2, tinst;

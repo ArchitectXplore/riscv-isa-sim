@@ -31,7 +31,7 @@ class rocc_t : public extension_t
   std::vector<insn_desc_t> get_instructions();
   std::vector<disasm_insn_t*> get_disasms();
 };
-
+#ifndef ARCHXPLORE_WBSPLIT
 #define define_custom_func(type_name, ext_name_str, func_name, method_name) \
   static reg_t func_name(processor_t* p, insn_t insn, reg_t pc) \
   { \
@@ -48,6 +48,26 @@ class rocc_t : public extension_t
     }                                                             \
     return pc+4; \
   } \
+
+#else // ARCHXPLORE_WBSPLIT
+#define define_custom_func(type_name, ext_name_str, func_name, method_name) \
+  static reg_t func_name(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb) \
+  { \
+    type_name* rocc = static_cast<type_name*>(p->get_extension(ext_name_str)); \
+    rocc_insn_union_t u; \
+    state_t* state = p->get_state();                          \
+    u.i = insn;                                               \
+    reg_t xs1 = u.r.xs1 ? state->XPR[insn.rs1()] : -1;        \
+    reg_t xs2 = u.r.xs2 ? state->XPR[insn.rs2()] : -1;        \
+    reg_t xd = rocc->method_name(u.r, xs1, xs2);              \
+    if (u.r.xd) {                                                 \
+      state->log_reg_write[insn.rd() << 4] = {xd, 0};             \
+      resultwb.xresult = xp;                                      \
+    }                                                             \
+    return pc+4; \
+  } \
+
+#endif // ARCHXPLORE_WBSPLIT
 
 #define push_custom_insn(insn_list, opcode, opcode_mask, func_name_32, func_name_64) \
   insn_list.push_back((insn_desc_t){opcode, opcode_mask,                \

@@ -6,31 +6,19 @@
 // #include <stdfloat>
 
 namespace archXplore{
-class ExceptionBase{
-public:
-    using PtrType = std::shared_ptr<ExceptionBase>;
-    bool valid = false;
-    reg_t ecause = 0xdeadbeaf;
-    virtual ~ExceptionBase() = default;
-};
 
 class InstrBase{
 public:
     using PtrType = std::shared_ptr<InstrBase>;
     reg_t pc = 0xdeadbeaf;
     reg_t instr_raw = 0xdeadbeaf;
-    ExceptionBase::PtrType exception;
+    // exec result
+    reg_t npc = 0xdeadbeaf;
+    // exception 
+    bool evalid = false;
+    reg_t ecause = 0xdeadbeaf;
     virtual ~InstrBase() = default;
 };   
-
-class ExeResultBase{
-public:
-    using PtrType = std::shared_ptr<ExeResultBase>;
-    reg_t npc = 0xdeadbeaf;
-    reg_t result_val = 0xdeadbeaf;
-    virtual ~ExeResultBase() = default;
-};
-
 
 
 class AbstractProcessorBase: public MemIf::CoreIf{
@@ -68,10 +56,11 @@ public:
     // exe if
     virtual void reset() const = 0;
     virtual void decode(InstrBase::PtrType instr) const = 0;  
-    virtual void execute(InstrBase::PtrType instr, ExeResultBase::PtrType exe_result) const = 0;
+    virtual void execute(InstrBase::PtrType instr) const = 0;
     virtual void fetch(InstrBase::PtrType instr) const = 0;
     virtual void ptw(InstrBase::PtrType instr) const = 0;
     virtual void handleExceptions(InstrBase::PtrType instr) const = 0;
+    virtual void writeBack(InstrBase::PtrType instr) const = 0;
 protected:
     UncorePtr _uncore;
 };

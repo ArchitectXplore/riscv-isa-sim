@@ -4,38 +4,30 @@
 #include "../riscv/mmu.h"
 #include <memory>
 namespace archXplore{
-class SpikeException: public ExceptionBase{
-public:
-    using ExceptionBase::valid;
-    using PtrType = std::shared_ptr<SpikeException>;
-    reg_t ExceptionBase::ecause;
-    trap_t trap{0};
-    SpikeException(){}
-};
 
 class SpikeInstr: public InstrBase{
 public:
+    using PtrType = std::shared_ptr<SpikeInstr>;
     using InstrBase::pc;
     using InstrBase::instr_raw;
-    using InstrBase::exception;
-    using PtrType = std::shared_ptr<SpikeInstr>;
-    insn_func_t instr_func;
+    insn_t instr;
+    // exception 
+    using InstrBase::evalid;
+    using InstrBase::ecause;
+    using TrapPtr = std::unique_ptr<trap_t>;
+    TrapPtr trap;
+    // exec result
+    using InstrBase::npc;
+    insn_func_t instr_func; 
+#ifdef ARCHXPLORE_WBSPLIT
+    ResultWB resultwb;
+#endif // ARCHXPLORE_WBSPLIT
+
     SpikeInstr(const reg_t& pc){
         this->pc = pc;
-        this->exception = std::make_shared<SpikeException>();
     }
     static SpikeInstr::PtrType createInstr(const reg_t& pc){
         return std::make_shared<SpikeInstr>(pc);
-    }
-};
-class SpikeResult: public ExeResultBase{
-public:
-    using PtrType = std::shared_ptr<SpikeResult>;
-    using ExeResultBase::npc;
-    using ExeResultBase::result_val;
-    SpikeResult() = default;
-    static SpikeResult::PtrType createResult(){
-        return std::make_shared<SpikeResult>();
     }
 };
 class SpikeAbstractProcessor: public AbstractProcessorBase, public simif_t{
@@ -60,18 +52,18 @@ public:
         delete debug_mmu;
     }
     void setSerialized(const bool& flag){_processor->state.serialized = flag;}
-    void advancePc(archXplore::SpikeResult::PtrType resultPtr){
-        if (unlikely(resultPtr->npc & 1 == 1)) { 
-            std::cout << "problem npc: " << resultPtr->npc << std::endl;
-            switch (resultPtr->npc) { 
+    void advancePc(archXplore::SpikeInstr::PtrType ptr){
+        if (unlikely(ptr->npc & 1 == 1)) { 
+            std::cout << "problem npc: " << ptr->npc << std::endl;
+            switch (ptr->npc) { 
                 case 3: _processor->state.serialized = true;break; // PC_SERIALIZE_BEFORE
                 case 5: break;  //PC_SERIALIZE_AFTER
                 default: abort(); 
             } 
-            resultPtr->npc = _processor->state.pc;
+            ptr->npc = _processor->state.pc;
             // break; 
         } else { 
-            _processor->state.pc = resultPtr->npc; 
+            _processor->state.pc = ptr->npc; 
         }
     }
     // * from AbstractProcessorBase
@@ -103,10 +95,11 @@ public:
     // exe if
     virtual void reset() const override final;
     virtual void decode(InstrBase::PtrType instr) const  override final;  
-    virtual void execute(InstrBase::PtrType instr, ExeResultBase::PtrType exe_result) const  override final; 
+    virtual void execute(InstrBase::PtrType instr) const  override final; 
     virtual void fetch(InstrBase::PtrType instr) const override final;
     virtual void ptw(InstrBase::PtrType instr) const override final;
     virtual void handleExceptions(InstrBase::PtrType instr) const override final;
+    virtual void writeBack(InstrBase::PtrType instr) const override final;
 
     // simif.h
     virtual char* addr_to_mem(reg_t paddr) override final;
