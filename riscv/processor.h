@@ -96,8 +96,8 @@ struct state_t
   void reset(processor_t* const proc, reg_t max_isa);
 
   reg_t pc;
-  regfile_t<reg_t, NXPR, true> XPR;
-  regfile_t<freg_t, NFPR, false> FPR;
+  regfile_t<reg_t, NXPR, NXPR, true> XPR;
+  regfile_t<freg_t, NFPR, NFPR, false> FPR;
 
   // control and status registers
   std::unordered_map<reg_t, csr_t_p> csrmap;

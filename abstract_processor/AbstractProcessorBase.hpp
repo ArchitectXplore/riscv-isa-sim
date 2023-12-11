@@ -2,25 +2,10 @@
 #include <memory>
 
 #include "./memif.hpp"
-
+#include "./InstrBase.hpp"
 // #include <stdfloat>
 
 namespace archXplore{
-
-class InstrBase{
-public:
-    using PtrType = std::shared_ptr<InstrBase>;
-    reg_t pc = 0xdeadbeaf;
-    reg_t instr_raw = 0xdeadbeaf;
-    // exec result
-    reg_t npc = 0xdeadbeaf;
-    // exception 
-    bool evalid = false;
-    reg_t ecause = 0xdeadbeaf;
-    virtual ~InstrBase() = default;
-};   
-
-
 class AbstractProcessorBase: public MemIf::CoreIf{
 public:
     using UncorePtr = std::shared_ptr<MemIf::UncoreIf>;
@@ -37,8 +22,8 @@ public:
     // state if
     virtual void reset_state() const = 0;
 
-    virtual void get_pc(reg_t& ret) const = 0;
-    virtual void set_pc(const reg_t& pc) = 0;
+    virtual void getPc(reg_t& ret) const = 0;
+    virtual void setPc(const reg_t& pc) = 0;
     
     virtual void get_xpr(const size_t& idx, reg_t& ret) const = 0;
     virtual void set_xpr(const size_t& idx, const reg_t& val) = 0;
@@ -55,10 +40,13 @@ public:
 
     // exe if
     virtual void reset() const = 0;
+    virtual void checkInterrupt(InstrBase::PtrType instr) const = 0;
     virtual void decode(InstrBase::PtrType instr) const = 0;  
+    virtual void updateRename(InstrBase::PtrType instr) const = 0;  
     virtual void execute(InstrBase::PtrType instr) const = 0;
     virtual void fetch(InstrBase::PtrType instr) const = 0;
     virtual void ptw(InstrBase::PtrType instr) const = 0;
+    virtual void handleInterrupts(InstrBase::PtrType instr) const = 0;
     virtual void handleExceptions(InstrBase::PtrType instr) const = 0;
     virtual void writeBack(InstrBase::PtrType instr) const = 0;
 protected:

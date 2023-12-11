@@ -3,13 +3,13 @@
 #include "../riscv/processor.h"
 #include "../riscv/mmu.h"
 #include <memory>
+#include "../riscv/decode_macros.h"
 namespace archXplore{
 
-class SpikeInstr: public InstrBase{
+class SpikeInstr: public RVInstrBase{
 public:
     using PtrType = std::shared_ptr<SpikeInstr>;
     using InstrBase::pc;
-    using InstrBase::instr_raw;
     insn_t instr;
     // exception 
     using InstrBase::evalid;
@@ -26,6 +26,13 @@ public:
     SpikeInstr(const reg_t& pc){
         this->pc = pc;
     }
+    void setAllPrgeAsAreg(){
+        _prd = rd();
+        _prs1 = rs1();
+        _prs2 = rs2();
+        _prs3 = rs3();
+    }
+
     static SpikeInstr::PtrType createInstr(const reg_t& pc){
         return std::make_shared<SpikeInstr>(pc);
     }
@@ -54,7 +61,7 @@ public:
     void setSerialized(const bool& flag){_processor->state.serialized = flag;}
     void advancePc(archXplore::SpikeInstr::PtrType ptr){
         if (unlikely(ptr->npc & 1 == 1)) { 
-            std::cout << "problem npc: " << ptr->npc << std::endl;
+            // std::cout << "problem npc: " << ptr->npc << std::endl;
             switch (ptr->npc) { 
                 case 3: _processor->state.serialized = true;break; // PC_SERIALIZE_BEFORE
                 case 5: break;  //PC_SERIALIZE_AFTER
@@ -78,8 +85,8 @@ public:
     // state if
     virtual void reset_state() const override final;
 
-    virtual void get_pc(reg_t& ret) const override final;
-    virtual void set_pc(const reg_t& pc) override final;
+    virtual void getPc(reg_t& ret) const override final;
+    virtual void setPc(const reg_t& pc) override final;
     
     virtual void get_xpr(const size_t& idx, reg_t& ret) const  override final;
     virtual void set_xpr(const size_t& idx, const reg_t& val)  override final;
@@ -94,10 +101,13 @@ public:
 
     // exe if
     virtual void reset() const override final;
-    virtual void decode(InstrBase::PtrType instr) const  override final;  
-    virtual void execute(InstrBase::PtrType instr) const  override final; 
     virtual void fetch(InstrBase::PtrType instr) const override final;
+    virtual void checkInterrupt(InstrBase::PtrType instr) const override final;  
+    virtual void decode(InstrBase::PtrType instr) const override final;  
+    virtual void updateRename(InstrBase::PtrType instr) const override final;  
+    virtual void execute(InstrBase::PtrType instr) const  override final; 
     virtual void ptw(InstrBase::PtrType instr) const override final;
+    virtual void handleInterrupts(InstrBase::PtrType instr) const override final;
     virtual void handleExceptions(InstrBase::PtrType instr) const override final;
     virtual void writeBack(InstrBase::PtrType instr) const override final;
 

@@ -6,7 +6,7 @@
             "request": "launch",
             "program": "/work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/build/playground/playground_main",
             "args": [
-                "rv64ui-v-addi",
+                "rv64mi-p-illegal",
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

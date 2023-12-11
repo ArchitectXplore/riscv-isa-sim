@@ -17,11 +17,15 @@
 #define CHECK_REG(reg) ((void) 0)
 #define READ_REG(reg) (CHECK_REG(reg), STATE.XPR[reg])
 #define READ_FREG(reg) STATE.FPR[reg]
-#define RD READ_REG(insn.rd())
-#define RS1 READ_REG(insn.rs1())
-#define RS2 READ_REG(insn.rs2())
-#define RS3 READ_REG(insn.rs3())
-#define WRITE_RD(value) WRITE_REG(insn.rd(), value)
+// #define RD READ_REG(insn.rd())
+// #define RS1 READ_REG(insn.rs1())
+// #define RS2 READ_REG(insn.rs2())
+// #define RS3 READ_REG(insn.rs3())
+#define RD READ_REG(insn.prd())
+#define RS1 READ_REG(insn.prs1())
+#define RS2 READ_REG(insn.prs2())
+#define RS3 READ_REG(insn.prs3())
+#define WRITE_RD(value) WRITE_REG(insn.prd(), value)
 #ifdef ARCHXPLORE_WBSPLIT
 #endif // ARCHXPLORE_WBSPLIT
 /* 0 : int
@@ -63,11 +67,24 @@
 #define RVC_RS2S READ_REG(insn.rvc_rs2s())
 #define RVC_FRS2 READ_FREG(insn.rvc_rs2())
 #define RVC_FRS2S READ_FREG(insn.rvc_rs2s())
-#define RVC_SP READ_REG(X_SP)
+// #define RVC_SP READ_REG(X_SP)
+// #define WRITE_RVC_RS1S(value) WRITE_REG(insn.prs1(), value)
+// #define WRITE_RVC_RS2S(value) WRITE_REG(insn.prs2(), value)
+// #define WRITE_RVC_FRS2S(value) WRITE_FREG(insn.prs2(), value)
+// #define RVC_RS1 READ_REG(insn.prs1())
+// #define RVC_RS2 READ_REG(insn.prs2())
+// #define RVC_RS1S READ_REG(insn.prs1())
+// #define RVC_RS2S READ_REG(insn.prs2())
+// #define RVC_FRS2 READ_FREG(insn.prs2())
+// #define RVC_FRS2S READ_FREG(insn.prs2())
 
 // Zc* macros
 #define RVC_R1S (Sn(insn.rvc_r1sc()))
 #define RVC_R2S (Sn(insn.rvc_r2sc()))
+// TODO: 
+// ! The following macros are not changed. 
+// ! Cannot figure out a elegant way to translate X_SP to physical reg
+#define RVC_SP READ_REG(X_SP)
 #define SP READ_REG(X_SP)
 #define RA READ_REG(X_RA)
 
@@ -90,6 +107,20 @@
 #define FRS3_H READ_FREG_H(insn.rs3())
 #define FRS3_F READ_FREG_F(insn.rs3())
 #define FRS3_D READ_FREG_D(insn.rs3())
+// #define FRS1 READ_FREG(insn.prs1())
+// #define FRS2 READ_FREG(insn.prs2())
+// #define FRS3 READ_FREG(insn.prs3())
+// #define FRS1_H READ_FREG_H(insn.prs1())
+// #define FRS1_BF READ_FREG_BF(insn.prs1())
+// #define FRS1_F READ_FREG_F(insn.prs1())
+// #define FRS1_D READ_FREG_D(insn.prs1())
+// #define FRS2_H READ_FREG_H(insn.prs2())
+// #define FRS2_F READ_FREG_F(insn.prs2())
+// #define FRS2_D READ_FREG_D(insn.prs2())
+// #define FRS3_H READ_FREG_H(insn.prs3())
+// #define FRS3_F READ_FREG_F(insn.prs3())
+// #define FRS3_D READ_FREG_D(insn.prs3())
+
 
 #define dirty_fp_state  STATE.sstatus->dirty(SSTATUS_FS)
 #define dirty_ext_state STATE.sstatus->dirty(SSTATUS_XS)
@@ -100,11 +131,11 @@
 #else // ARCHXPLORE_WBSPLIT
 #define DO_WRITE_FREG(reg, value) (resultwb.fresult = value, dirty_fp_state)
 #endif // ARCHXPLORE_WBSPLIT
-#define WRITE_FRD(value) WRITE_FREG(insn.rd(), value)
+#define WRITE_FRD(value) WRITE_FREG(insn.prd(), value)
 #define WRITE_FRD_H(value) \
 do { \
   if (p->extension_enabled(EXT_ZFINX)) \
-    WRITE_REG(insn.rd(), sext_xlen((int16_t)((value).v))); \
+    WRITE_REG(insn.prd(), sext_xlen((int16_t)((value).v))); \
   else { \
     WRITE_FRD(value); \
   } \
@@ -113,7 +144,7 @@ do { \
 #define WRITE_FRD_F(value) \
 do { \
   if (p->extension_enabled(EXT_ZFINX)) \
-    WRITE_REG(insn.rd(), sext_xlen((value).v)); \
+    WRITE_REG(insn.prd(), sext_xlen((value).v)); \
   else { \
     WRITE_FRD(value); \
   } \
@@ -125,7 +156,7 @@ do { \
       uint64_t val = (value).v; \
       WRITE_RD_PAIR(val); \
     } else { \
-      WRITE_REG(insn.rd(), (value).v); \
+      WRITE_REG(insn.prd(), (value).v); \
     } \
   } else { \
     WRITE_FRD(value); \
@@ -181,6 +212,7 @@ static inline bool is_aligned(const unsigned val, const unsigned pos)
   require(!is_overlapped(astart, asize, bstart, bsize))
 #define require_noover_widen(astart, asize, bstart, bsize) \
   require(!is_overlapped_widen(astart, asize, bstart, bsize))
+// ? should not change to prd? 
 #define require_vm do { if (insn.v_vm() == 0) require(insn.rd() != 0); } while (0);
 #define require_envcfg(field) \
   do { \

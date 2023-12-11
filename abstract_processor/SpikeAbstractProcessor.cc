@@ -22,10 +22,10 @@ void SpikeAbstractProcessor::set_clint(const reg_t& idx, const reg_t& pc) {
 void SpikeAbstractProcessor::reset_state() const {
 }
 
-void SpikeAbstractProcessor::get_pc(reg_t& ret) const {
+void SpikeAbstractProcessor::getPc(reg_t& ret) const {
     ret = _processor->state.pc;
 }
-void SpikeAbstractProcessor::set_pc(const reg_t& pc) {
+void SpikeAbstractProcessor::setPc(const reg_t& pc) {
     _processor->state.pc = pc;
 }
 
@@ -71,42 +71,11 @@ inline void setException(SpikeInstr::PtrType ptr, trap_t& t){
 void SpikeAbstractProcessor::reset() const{
     _processor->reset();
 }
-void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) const {
-    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    try{
-        ptr->instr_func = _processor->decode_insn(ptr->instr_raw);
-        return;
-    }
-    catch(trap_t& t){
-        setException(ptr, t);
-    }
-    return;
-}  
-void SpikeAbstractProcessor::execute(InstrBase::PtrType instr) const {
-    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    try{
-        std::optional<reg_t> xresult = std::nullopt;
-        std::optional<freg_t> fresult = std::nullopt;
-#ifndef ARCHXPLORE_WBSPLIT
-        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc);
-#else // ARCHXPLORE_WBSPLIT
-        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc, ptr->resultwb);
-#endif // ARCHXPLORE_WBSPLIT
-        if(ptr->pc == 0xd1010140)
-            std::cout << std::hex << ptr->npc << std::endl;
-        return;
-    }
-    catch(trap_t& t){
-        setException(ptr, t);
-    }
-    return; 
-
-}
 void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     try{
         auto fetch = _processor->mmu->access_icache(ptr->pc)->data;
-        ptr->instr_raw = fetch.insn.bits();
+        ptr->setRaw(fetch.insn.bits());
         ptr->instr = fetch.insn;
         ptr->instr_func = fetch.func;
         return;
@@ -114,15 +83,90 @@ void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr) const{
     catch(trap_t& t){
         setException(ptr, t);
     }
+    catch (wait_for_interrupt_t &t)
+    {
+        // TODO: have to suspend the running and wait for outside interrupt
+      // Return to the outer simulation loop, which gives other devices/harts a
+      // chance to generate interrupts.
+      //
+      // In the debug ROM this prevents us from wasting time looping, but also
+      // allows us to switch to other threads only once per idle loop in case
+      // there is activity.
+      _processor->in_wfi = true;
+    }
     return; 
 }
+void SpikeAbstractProcessor::checkInterrupt(InstrBase::PtrType instr) const{
+    if(_processor->state.mip->read() & _processor->state.mie->read())
+        instr->ivalid = true;
+}
+void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) const {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    try{
+        ptr->instr_func = _processor->decode_insn(ptr->getRaw());
+        return;
+    }
+    catch(trap_t& t){
+        setException(ptr, t);
+    }
+    catch (wait_for_interrupt_t &t)
+    {
+      _processor->in_wfi = true;
+    }
+    return;
+}  
+void SpikeAbstractProcessor::updateRename(InstrBase::PtrType instr) const {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    ptr->instr.set_prd(ptr->prd());
+    ptr->instr.set_prs1(ptr->prs1());
+    ptr->instr.set_prs2(ptr->prs2());
+    ptr->instr.set_prs3(ptr->prs3());
+    if(ptr->rd() != 0)
+        _processor->state.XPR.updateArchToPhy(ptr->rd(), ptr->prd());
+}  
+void SpikeAbstractProcessor::execute(InstrBase::PtrType instr) const {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    if(instr->pc == 0x800001d8) {
+        std::cout << "Debug \n" << std::endl;
+    }
+    try{
+#ifndef ARCHXPLORE_WBSPLIT
+        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc);
+#else // ARCHXPLORE_WBSPLIT
+        std::optional<reg_t> xresult = std::nullopt;
+        std::optional<freg_t> fresult = std::nullopt;
+        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc, ptr->resultwb);
+#endif // ARCHXPLORE_WBSPLIT
+        return;
+    }
+    catch(trap_t& t){
+        setException(ptr, t);
+    }
+    catch (wait_for_interrupt_t &t)
+    {
+      _processor->in_wfi = true;
+    }
+    return; 
+
+}
+
 void SpikeAbstractProcessor::ptw(InstrBase::PtrType instr) const{
     throw "unimpl!";
+}
+void SpikeAbstractProcessor::handleInterrupts(InstrBase::PtrType instr) const{
+    if(!instr->ivalid)return;
+    try{
+        _processor->take_interrupt(_processor->state.mip->read() & _processor->state.mie->read());
+    }
+    catch(trap_t& t){
+        auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+        setException(ptr, t);
+    }
 }
 void SpikeAbstractProcessor::handleExceptions(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     if(!ptr->evalid) return;
-    std::cout << "get exception " << std::hex << ptr->ecause << std::endl;
+    //     std::cout << "get exception " << std::hex << ptr->ecause << std::endl;
     _processor->take_trap(*(ptr->trap), ptr->pc);
     auto match = _processor->TM.detect_trap_match(*(ptr->trap));
     if (match.has_value())

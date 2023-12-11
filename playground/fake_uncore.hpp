@@ -62,9 +62,9 @@ public:
         ss << "size " << std::hex << s << " ";
         throw ss.str();
     }
-    uint32_t peekToHost(){
-        char* mem = getMem(tohost_paddr, 4);
-        return *((uint32_t*)mem);
+    uint64_t peekToHost(){
+        char* mem = getMem(tohost_paddr, 8);
+        return *((uint64_t*)mem);
     }
     void setbyte(const uint64_t& addr, const uint8_t& val){
         char* mem = getMem(addr, 1);

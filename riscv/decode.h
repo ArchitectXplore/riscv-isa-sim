@@ -88,6 +88,14 @@ public:
   uint64_t rs1() { return x(15, 5); }
   uint64_t rs2() { return x(20, 5); }
   uint64_t rs3() { return x(27, 5); }
+  uint64_t prd() { return _prd; }
+  uint64_t prs1() { return _prs1; }
+  uint64_t prs2() { return _prs2; }
+  uint64_t prs3() { return _prs3; }
+  void set_prd(const uint64_t& prd)   {_prd = prd; }
+  void set_prs1(const uint64_t& prs1) {_prs1 = prs1; }
+  void set_prs2(const uint64_t& prs2) {_prs2 = prs2; }
+  void set_prs3(const uint64_t& prs3) {_prs3 = prs3; }
   uint64_t rm() { return x(12, 3); }
   uint64_t csr() { return x(20, 12); }
   uint64_t iorw() { return x(20, 8); }
@@ -196,13 +204,17 @@ public:
   }
 
 private:
+  uint64_t _prs1;
+  uint64_t _prs2;
+  uint64_t _prs3;
+  uint64_t _prd;
   insn_bits_t b;
   uint64_t x(int lo, int len) { return (b >> lo) & ((insn_bits_t(1) << len) - 1); }
   uint64_t xs(int lo, int len) { return int64_t(b) << (64 - lo - len) >> (64 - len); }
   uint64_t imm_sign() { return xs(31, 1); }
 };
 
-template <class T, size_t N, bool zero_reg>
+template <class T, size_t archN, size_t phyN, bool zero_reg>
 class regfile_t
 {
 public:
@@ -210,6 +222,12 @@ public:
   {
     if (!zero_reg || i != 0)
       data[i] = value;
+  }
+  T getArchReg(const size_t& i){
+    return data[_archToPhyVec[i]];
+  }
+  void updateArchToPhy(const size_t& a, const size_t& p){
+    _archToPhyVec[a] = p;
   }
   const T& operator [] (size_t i) const
   {
@@ -222,9 +240,12 @@ public:
   void reset()
   {
     memset(data, 0, sizeof(data));
+    for(size_t i = 0; i < archN; i ++)
+      _archToPhyVec[i] = i;
   }
 private:
-  T data[N];
+  T data[phyN];
+  size_t _archToPhyVec[archN];
 };
 
 #define get_field(reg, mask) \

@@ -14,4 +14,6 @@ isatest/
 .vscode/
 log.txt
 gitpatch
-
+isatest_logs
+core.*
+*.spike.dump

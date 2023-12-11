@@ -17,6 +17,7 @@ public:
         virtual void recieveMemResp(MemResp::PtrType) = 0;
         virtual void accessMemNoEffect(MemReq::PtrType, MemResp::PtrType) = 0;
 
+        // TODO: clint
         virtual void get_clint(const reg_t& idx, reg_t& ret) const = 0;
         virtual void set_clint(const reg_t& idx, const reg_t& pc) = 0;
     };
