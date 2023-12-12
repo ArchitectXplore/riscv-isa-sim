@@ -56,7 +56,12 @@ void SpikeAbstractProcessor::set_csr(const reg_t& idx, const reg_t& val) {
 void SpikeAbstractProcessor::try_set_csr(const reg_t& idx, reg_t& val) const noexcept {
     throw "unimpl!";
 }
-
+void SpikeAbstractProcessor::backdoorWriteMIP(const uint64_t& mask, const uint64_t& val){
+    _processor->state.mip->backdoor_write_with_mask(mask, val);
+}
+void SpikeAbstractProcessor::syncTimer(const uint64_t& ticks){
+     _processor->state.time->sync(ticks);
+}
 
 
 
@@ -71,6 +76,94 @@ inline void setException(SpikeInstr::PtrType ptr, trap_t& t){
 void SpikeAbstractProcessor::reset() const{
     _processor->reset();
 }
+void SpikeAbstractProcessor::run(const bool& trace_enable, const reg_t& n) {
+    for (size_t i = 0, steps = 0; i < n; i += steps)
+  {
+    steps = std::min(n - i, INTERLEAVE - _current_step);
+    int count = steps;
+    while(count -- > 0 && step(trace_enable)){
+    }
+
+    _current_step += steps;
+    if (_current_step == INTERLEAVE)
+    {
+      _current_step = 0;
+      _processor->get_mmu()->yield_load_reservation();
+    reg_t rtc_ticks = INTERLEAVE / INSNS_PER_RTC_TICK;
+    for (auto &dev : _devices) dev->tick(rtc_ticks);
+    }
+  }
+}
+bool SpikeAbstractProcessor::step(const bool& trace_enable) {
+    // * gen instr
+    reg_t pc;
+    getPc(pc);
+    if(pc == 0x80000198)
+        std::cout << "debug enter" << std::endl;
+    if(trace_enable)
+        std::cout << std::hex << pc << ":\t";
+    auto instrPtr = archXplore::SpikeInstr::createInstr(pc);
+
+    // * handle interruption
+    handleInterrupts(instrPtr);
+    // * wfi 
+    if(unlikely(_processor->in_wfi))
+        return false;
+
+    // * fetch 
+    // actually this stage contian decode
+    if(likely(!instrPtr->evalid)){
+        fetch(instrPtr);
+        if(trace_enable)
+            std::cout << std::hex << instrPtr->getRaw() << std::endl;
+    }
+    
+    // * decode 
+    // actually this stage is useless in spike abstract core since fetch can carry out everything
+    // still add this stage just for tese
+    if(likely(!instrPtr->evalid)){
+        decode(instrPtr);
+    }
+
+    // * rename
+    // this is also a fake rename
+    if(likely(!instrPtr->evalid)){
+        instrPtr->setAllPrgeAsAreg();
+        updateRename(instrPtr);
+    }
+
+    // * exe 
+    if(likely(!instrPtr->evalid)){
+        execute(instrPtr);
+    }
+
+    // * handle wfi
+    if(_processor->in_wfi){
+        if(trace_enable)
+            std::cout << "  enter wfi" << std::endl;
+        return false;
+    }
+
+    // * handle exception
+    // exception should be handeld after interrupt since interrupt will set up a trap
+    if(instrPtr->evalid){
+        handleExceptions(instrPtr);
+        if(trace_enable)
+            std::cout << "  get exception: " << std::hex << instrPtr->ecause << std::endl;
+        return !_processor->in_wfi;
+    }
+    
+
+    // * wb
+    // this is only abled when macro ARCHXPLORE_WBSPLIT is defined
+    writeBack(instrPtr);
+
+    // * get next pc
+    advancePc(instrPtr);
+    return true;
+}
+
+
 void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     try{
@@ -154,7 +247,6 @@ void SpikeAbstractProcessor::ptw(InstrBase::PtrType instr) const{
     throw "unimpl!";
 }
 void SpikeAbstractProcessor::handleInterrupts(InstrBase::PtrType instr) const{
-    if(!instr->ivalid)return;
     try{
         _processor->take_interrupt(_processor->state.mip->read() & _processor->state.mie->read());
     }

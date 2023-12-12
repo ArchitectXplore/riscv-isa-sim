@@ -5,6 +5,7 @@ add_library(riscv
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/cfg.cc
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/check-opcode-overlap.t.cc
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/csrs.cc
+    /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/clint.cc
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/devices.cc
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/execute.cc
     /work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/riscv/extension.cc

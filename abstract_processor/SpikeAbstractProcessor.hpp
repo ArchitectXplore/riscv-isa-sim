@@ -2,10 +2,12 @@
 #include "../riscv/simif.h"
 #include "../riscv/processor.h"
 #include "../riscv/mmu.h"
+#include "../riscv/devices.h"
 #include <memory>
 #include "../riscv/decode_macros.h"
 namespace archXplore{
-
+static const size_t INTERLEAVE = 5000;
+static const size_t INSNS_PER_RTC_TICK = 100; // 10 MHz clock for 1 BIPS core
 class SpikeInstr: public RVInstrBase{
 public:
     using PtrType = std::shared_ptr<SpikeInstr>;
@@ -41,7 +43,9 @@ class SpikeAbstractProcessor: public AbstractProcessorBase, public simif_t{
 private:
     std::shared_ptr<processor_t> _processor;
     std::map<size_t, processor_t*> _harts;
-
+    using DevicePtr = std::shared_ptr<abstract_device_t>;
+    std::vector<DevicePtr> _devices;
+    reg_t _current_step = 0;
 public:
     using AbstractProcessorBase::UncorePtr;
     SpikeAbstractProcessor(const isa_parser_t *isa, const cfg_t *cfg,
@@ -54,6 +58,11 @@ public:
     {
         _harts[0] = _processor.get();
         debug_mmu = new mmu_t(this, cfg->endianness, nullptr);
+        _devices.push_back(std::make_shared<clint_t>(
+            this, // simif_t
+            0, // freq_hz not important when realtime is false
+            false // realtime
+        ));
     }
     ~SpikeAbstractProcessor(){
         delete debug_mmu;
@@ -73,6 +82,12 @@ public:
             _processor->state.pc = ptr->npc; 
         }
     }
+    void tick(reg_t time){
+        for(auto device : _devices)
+            device->tick(time);
+    }
+    bool step(const bool& trace_enable);
+    void run(const bool& trace_enable, const reg_t& interval);
     // * from AbstractProcessorBase
     virtual void sendMemReq(MemReq::PtrType)  override final;
     virtual void recieveMemResp(MemResp::PtrType)  override final;
@@ -98,6 +113,9 @@ public:
     virtual void try_get_csr(const reg_t& idx, reg_t& ret) const noexcept  override final;
     virtual void set_csr(const reg_t& idx, const reg_t& val)  override final;
     virtual void try_set_csr(const reg_t& idx, reg_t& val) const noexcept  override final;
+
+    virtual void backdoorWriteMIP(const uint64_t& mask, const uint64_t& val) override final;
+    virtual void syncTimer(const uint64_t& ticks) override final;
 
     // exe if
     virtual void reset() const override final;

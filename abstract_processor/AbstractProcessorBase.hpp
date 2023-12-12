@@ -15,8 +15,6 @@ public:
     virtual void recieveMemResp(MemResp::PtrType) = 0;
     virtual void accessMemNoEffect(MemReq::PtrType, MemResp::PtrType) = 0;
 
-    virtual void get_clint(const reg_t& idx, reg_t& ret) const = 0;
-    virtual void set_clint(const reg_t& idx, const reg_t& pc) = 0;
 
 
     // state if
@@ -36,6 +34,8 @@ public:
     virtual void set_csr(const reg_t& idx, const reg_t& val) = 0;
     virtual void try_set_csr(const reg_t& idx, reg_t& val) const noexcept = 0;
 
+    virtual void backdoorWriteMIP(const uint64_t& mask, const uint64_t& val) = 0;
+    virtual void syncTimer(const uint64_t& ticks) = 0;
 
 
     // exe if

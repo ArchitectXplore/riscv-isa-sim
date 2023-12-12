@@ -3,7 +3,7 @@
 #include "devices.h"
 #include "processor.h"
 #include "simif.h"
-#include "sim.h"
+// #include "sim.h"
 #include "dts.h"
 
 clint_t::clint_t(const simif_t* sim, uint64_t freq_hz, bool real_time)
@@ -116,6 +116,7 @@ void clint_t::tick(reg_t rtc_ticks)
   }
 }
 
+#ifndef SPIKE_ABSTRACT_PROCESSOR
 clint_t* clint_parse_from_fdt(const void* fdt, const sim_t* sim, reg_t* base) {
   if (fdt_parse_clint(fdt, base, "riscv,clint0") == 0)
     return new clint_t(sim,
@@ -124,7 +125,6 @@ clint_t* clint_parse_from_fdt(const void* fdt, const sim_t* sim, reg_t* base) {
   else
     return nullptr;
 }
-
 std::string clint_generate_dts(const sim_t* sim) {
   std::stringstream s;
   s << std::hex
@@ -143,3 +143,4 @@ std::string clint_generate_dts(const sim_t* sim) {
 }
 
 REGISTER_DEVICE(clint, clint_parse_from_fdt, clint_generate_dts)
+#endif // SPIKE_ABSTRACT_PROCESSOR

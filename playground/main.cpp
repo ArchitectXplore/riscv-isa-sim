@@ -1,4 +1,5 @@
 #include "../riscv/processor.h"
+#include "../riscv/devices.h"
 #include "../abstract_processor/SpikeAbstractProcessor.hpp"
 #include "./fake_uncore.hpp"
 #include <iostream>
@@ -65,65 +66,10 @@ int main(int argc, char* argv[]){
         processor.reset();
         processor.setPc(program_start);
         while(steps > 0){
-            steps --;
-            // * gen instr
-            reg_t pc;
-            processor.getPc(pc);
-            if(trace_enable)
-                std::cout << std::hex << pc << ":\t";
-            auto instrPtr = archXplore::SpikeInstr::createInstr(pc);
-
-            // * fetch 
-            // actually this stage contian decode
-            if(likely(!instrPtr->evalid)){
-                processor.fetch(instrPtr);
-                if(trace_enable)
-                    std::cout << std::hex << instrPtr->getRaw() << std::endl;
-                processor.checkInterrupt(instrPtr);
-            }
-            
-            // * decode 
-            // actually this stage is useless in spike abstract core since fetch can carry out everything
-            // still add this stage just for tese
-            if(likely(!instrPtr->evalid)){
-                processor.decode(instrPtr);
-                processor.checkInterrupt(instrPtr);
-            }
-
-            // * rename
-            // this is also a fake rename
-            instrPtr->setAllPrgeAsAreg();
-            processor.updateRename(instrPtr);
-
-            // * exe 
-            if(likely(!instrPtr->evalid)){
-                processor.execute(instrPtr);
-                processor.checkInterrupt(instrPtr);
-            }
-
-            // * handle interruption
-            if(instrPtr->ivalid){
-                processor.handleInterrupts(instrPtr);
-                if(trace_enable)
-                    std::cout << "  get a interrupt or a interrupt is pending" << std::endl;
-            }
-
-            // * handle exception
-            // exception should be handeld after interrupt since interrupt will set up a trap
-            if(instrPtr->evalid){
-                processor.handleExceptions(instrPtr);
-                if(trace_enable)
-                    std::cout << "  get exception: " << std::hex << instrPtr->ecause << std::endl;
-                continue;
-            }
-            
-
-            // * wb
-            // this is only abled when macro ARCHXPLORE_WBSPLIT is defined
-            processor.writeBack(instrPtr);
-
-            // * get next pc
-            processor.advancePc(instrPtr);
+            steps -= archXplore::INTERLEAVE;
+            // steps -= 1;
+            processor.run(trace_enable, archXplore::INTERLEAVE);
+            // processor.step(trace_enable);
             if(uncore->peekToHost() & 0x1 == 0x1)
                 break;
         }
