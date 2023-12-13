@@ -71,6 +71,7 @@ const int NCSR = 4096;
 #define Sn(n) ((n) < 2 ? X_S0 + (n) : X_Sn + (n))
 
 typedef uint64_t insn_bits_t;
+#ifndef SPIKE_ABSTRACT_PROCESSOR
 class insn_t
 {
 public:
@@ -88,14 +89,6 @@ public:
   uint64_t rs1() { return x(15, 5); }
   uint64_t rs2() { return x(20, 5); }
   uint64_t rs3() { return x(27, 5); }
-  uint64_t prd() { return _prd; }
-  uint64_t prs1() { return _prs1; }
-  uint64_t prs2() { return _prs2; }
-  uint64_t prs3() { return _prs3; }
-  void set_prd(const uint64_t& prd)   {_prd = prd; }
-  void set_prs1(const uint64_t& prs1) {_prs1 = prs1; }
-  void set_prs2(const uint64_t& prs2) {_prs2 = prs2; }
-  void set_prs3(const uint64_t& prs3) {_prs3 = prs3; }
   uint64_t rm() { return x(12, 3); }
   uint64_t csr() { return x(20, 12); }
   uint64_t iorw() { return x(20, 8); }
@@ -204,17 +197,148 @@ public:
   }
 
 private:
-  uint64_t _prs1;
-  uint64_t _prs2;
-  uint64_t _prs3;
-  uint64_t _prd;
   insn_bits_t b;
   uint64_t x(int lo, int len) { return (b >> lo) & ((insn_bits_t(1) << len) - 1); }
   uint64_t xs(int lo, int len) { return int64_t(b) << (64 - lo - len) >> (64 - len); }
   uint64_t imm_sign() { return xs(31, 1); }
 };
 
-template <class T, size_t archN, size_t phyN, bool zero_reg>
+
+
+#else //SPIKE_ABSTRACT_PROCESSOR
+class insn_t
+{
+public:
+  insn_t() = default;
+  insn_t(insn_bits_t bits) : b(bits) {}
+  insn_bits_t bits() const { return b; }
+  int length() const { return insn_length(b); }
+  int64_t i_imm() const { return xs(20, 12); }
+  int64_t shamt() const { return x(20, 6); }
+  int64_t s_imm() const { return x(7, 5) + (xs(25, 7) << 5); }
+  int64_t sb_imm() const { return (x(8, 4) << 1) + (x(25, 6) << 5) + (x(7, 1) << 11) + (imm_sign() << 12); }
+  int64_t u_imm() const { return xs(12, 20) << 12; }
+  int64_t uj_imm() const { return (x(21, 10) << 1) + (x(20, 1) << 11) + (x(12, 8) << 12) + (imm_sign() << 20); }
+  uint64_t rd() const { return x(7, 5); }
+  uint64_t rs1() const { return x(15, 5); }
+  uint64_t rs2() const { return x(20, 5); }
+  uint64_t rs3() const { return x(27, 5); }
+  uint64_t rm() const { return x(12, 3); }
+  uint64_t csr() const { return x(20, 12); }
+  uint64_t iorw() const { return x(20, 8); }
+  uint64_t bs() const { return x(30, 2); } // Crypto ISE - SM4/AES32 byte select.
+  uint64_t rcon() const { return x(20, 4); } // Crypto ISE - AES64 round const.
+
+  int64_t rvc_imm() const { return x(2, 5) + (xs(12, 1) << 5); }
+  int64_t rvc_zimm() const { return x(2, 5) + (x(12, 1) << 5); }
+  int64_t rvc_addi4spn_imm() const { return (x(6, 1) << 2) + (x(5, 1) << 3) + (x(11, 2) << 4) + (x(7, 4) << 6); }
+  int64_t rvc_addi16sp_imm() const { return (x(6, 1) << 4) + (x(2, 1) << 5) + (x(5, 1) << 6) + (x(3, 2) << 7) + (xs(12, 1) << 9); }
+  int64_t rvc_lwsp_imm() const { return (x(4, 3) << 2) + (x(12, 1) << 5) + (x(2, 2) << 6); }
+  int64_t rvc_ldsp_imm() const { return (x(5, 2) << 3) + (x(12, 1) << 5) + (x(2, 3) << 6); }
+  int64_t rvc_swsp_imm() const { return (x(9, 4) << 2) + (x(7, 2) << 6); }
+  int64_t rvc_sdsp_imm() const { return (x(10, 3) << 3) + (x(7, 3) << 6); }
+  int64_t rvc_lw_imm() const { return (x(6, 1) << 2) + (x(10, 3) << 3) + (x(5, 1) << 6); }
+  int64_t rvc_ld_imm() const { return (x(10, 3) << 3) + (x(5, 2) << 6); }
+  int64_t rvc_j_imm() const { return (x(3, 3) << 1) + (x(11, 1) << 4) + (x(2, 1) << 5) + (x(7, 1) << 6) + (x(6, 1) << 7) + (x(9, 2) << 8) + (x(8, 1) << 10) + (xs(12, 1) << 11); }
+  int64_t rvc_b_imm() const { return (x(3, 2) << 1) + (x(10, 2) << 3) + (x(2, 1) << 5) + (x(5, 2) << 6) + (xs(12, 1) << 8); }
+  int64_t rvc_simm3() const { return x(10, 3); }
+  uint64_t rvc_rd() const { return rd(); }
+  uint64_t rvc_rs1() const { return rd(); }
+  uint64_t rvc_rs2() const { return x(2, 5); }
+  uint64_t rvc_rs1s() const { return 8 + x(7, 3); }
+  uint64_t rvc_rs2s() const { return 8 + x(2, 3); }
+
+  uint64_t rvc_lbimm() const { return (x(5, 1) << 1) + x(6, 1); }
+  uint64_t rvc_lhimm() const { return (x(5, 1) << 1); }
+
+  uint64_t rvc_r1sc() const { return x(7, 3); }
+  uint64_t rvc_r2sc() const { return x(2, 3); }
+  uint64_t rvc_rlist() const { return x(4, 4); }
+  uint64_t rvc_spimm() const { return x(2, 2) << 4; }
+
+  uint64_t rvc_index() const { return x(2, 8); }
+
+  uint64_t v_vm() const { return x(25, 1); }
+  uint64_t v_wd() const { return x(26, 1); }
+  uint64_t v_nf() const { return x(29, 3); }
+  uint64_t v_simm5() const { return xs(15, 5); }
+  uint64_t v_zimm5() const { return x(15, 5); }
+  uint64_t v_zimm10() const { return x(20, 10); }
+  uint64_t v_zimm11() const { return x(20, 11); }
+  uint64_t v_lmul() const { return x(20, 2); }
+  uint64_t v_frac_lmul() const { return x(22, 1); }
+  uint64_t v_sew() const { return 1 << (x(23, 3) + 3); }
+  uint64_t v_width() const { return x(12, 3); }
+  uint64_t v_mop() const { return x(26, 2); }
+  uint64_t v_lumop() const { return x(20, 5); }
+  uint64_t v_sumop() const { return x(20, 5); }
+  uint64_t v_vta() const { return x(26, 1); }
+  uint64_t v_vma() const { return x(27, 1); }
+  uint64_t v_mew() const { return x(28, 1); }
+  uint64_t v_zimm6() const { return x(15, 5) + (x(26, 1) << 5); }
+
+  uint64_t p_imm2() const { return x(20, 2); }
+  uint64_t p_imm3() const { return x(20, 3); }
+  uint64_t p_imm4() const { return x(20, 4); }
+  uint64_t p_imm5() const { return x(20, 5); }
+  uint64_t p_imm6() const { return x(20, 6); }
+
+  uint64_t zcmp_regmask() const {
+    unsigned mask = 0;
+    uint64_t rlist = rvc_rlist();
+
+    if (rlist >= 4)
+      mask |= 1U << X_RA;
+
+    for (reg_t i = 5; i <= rlist; i++)
+        mask |= 1U << Sn(i - 5);
+
+    if (rlist == 15)
+      mask |= 1U << Sn(11);
+
+    return mask;
+  }
+
+  uint64_t zcmp_stack_adjustment(int xlen) const {
+    reg_t stack_adj_base = 0;
+    switch (rvc_rlist()) {
+    case 15:
+      stack_adj_base += 16;
+    case 14:
+      if (xlen == 64)
+        stack_adj_base += 16;
+    case 13:
+    case 12:
+      stack_adj_base += 16;
+    case 11:
+    case 10:
+      if (xlen == 64)
+        stack_adj_base += 16;
+    case 9:
+    case 8:
+      stack_adj_base += 16;
+    case 7:
+    case 6:
+      if (xlen == 64)
+        stack_adj_base += 16;
+    case 5:
+    case 4:
+      stack_adj_base += 16;
+      break;
+    }
+
+    return stack_adj_base + rvc_spimm();
+  }
+
+private:
+  insn_bits_t b;
+  uint64_t x(int lo, int len) const { return (b >> lo) & ((insn_bits_t(1) << len) - 1); }
+  uint64_t xs(int lo, int len) const { return int64_t(b) << (64 - lo - len) >> (64 - len); }
+  uint64_t imm_sign() const { return xs(31, 1); }
+};
+#endif
+
+template <class T, size_t N, bool zero_reg>
 class regfile_t
 {
 public:
@@ -222,12 +346,6 @@ public:
   {
     if (!zero_reg || i != 0)
       data[i] = value;
-  }
-  T getArchReg(const size_t& i){
-    return data[_archToPhyVec[i]];
-  }
-  void updateArchToPhy(const size_t& a, const size_t& p){
-    _archToPhyVec[a] = p;
   }
   const T& operator [] (size_t i) const
   {
@@ -240,12 +358,9 @@ public:
   void reset()
   {
     memset(data, 0, sizeof(data));
-    for(size_t i = 0; i < archN; i ++)
-      _archToPhyVec[i] = i;
   }
 private:
-  T data[phyN];
-  size_t _archToPhyVec[archN];
+  T data[N];
 };
 
 #define get_field(reg, mask) \

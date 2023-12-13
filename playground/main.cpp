@@ -2,6 +2,8 @@
 #include "../riscv/devices.h"
 #include "../abstract_processor/SpikeAbstractProcessor.hpp"
 #include "./fake_uncore.hpp"
+#include "./fake_regfile.hpp"
+#include "./util.hpp"
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -38,6 +40,10 @@ int main(int argc, char* argv[]){
     isa_parser_t ip(cfg.isa(), cfg.priv());
     FILE* outputFile = fopen("./log.txt", "w");
     std::shared_ptr<FakeUncore> uncore = std::make_shared<FakeUncore>(mem_cfg, tohost_addr);
+    const int NXPR = 32;
+    const int NFPR = 32;
+    std::shared_ptr<FakeRegFile<reg_t>> xprf = std::make_shared<FakeRegFile<reg_t>>(NXPR, true);
+    std::shared_ptr<FakeRegFile<freg_t>> fprf = std::make_shared<FakeRegFile<freg_t>>(NFPR, false);
     archXplore::SpikeAbstractProcessor processor(
         &ip,
         &cfg,
@@ -45,7 +51,9 @@ int main(int argc, char* argv[]){
         false,
         outputFile,
         cout,
-        uncore
+        uncore,
+        xprf,
+        fprf
     );
     bool trace_enable = false;
     int steps = 100000;
@@ -79,7 +87,7 @@ int main(int argc, char* argv[]){
         // printf("%d\n", uncore->getbyte(tohost_addr));
         // printf("%d\n", uncore->peekToHost());
     }
-    catch(const std::string& s){
+    catch(const char* s){
         std::cout << "test failed. Get Exception:\n";
         std::cout << s << std::endl;
     }

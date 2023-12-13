@@ -17,23 +17,9 @@ public:
 
     reg_t getRaw() const {return _raw;}
     void setRaw(const reg_t& raw){_raw = raw;}
-
-    
-    uint64_t prd() { return _prd; }
-    uint64_t prs1() { return _prs1; }
-    uint64_t prs2() { return _prs2; }
-    uint64_t prs3() { return _prs3; }
-    void set_prd(const uint64_t& prd)   {_prd = prd; }
-    void set_prs1(const uint64_t& prs1) {_prs1 = prs1; }
-    void set_prs2(const uint64_t& prs2) {_prs2 = prs2; }
-    void set_prs3(const uint64_t& prs3) {_prs3 = prs3; }
     virtual ~InstrBase() = default;
 protected:
     reg_t _raw = 0xdeadbeaf;
-    reg_t _prs1;
-    reg_t _prs2;
-    reg_t _prs3;
-    reg_t _prd;
     reg_t _getBits(const int& lo, const int& len) { return (_raw >> lo) & ((reg_t(1) << len) - 1); }
     reg_t _getBitsSigned(int lo, int len) { return int64_t(_raw) << (64 - lo - len) >> (64 - len); }
 }; 
@@ -50,20 +36,6 @@ public:
     
     virtual ~RVInstrBase() = default;
 
-    // TODO: unfinished. There may be more cases
-    // ! need to return the REAL reg in the case of rvc
-    uint64_t ger_rd() {
-        return rd();
-    }
-    uint64_t ger_rs1() {
-        return rs1();
-    }
-    uint64_t ger_rs2() {
-        return rs2();
-    }
-    uint64_t ger_rs3() {
-        return rs3();
-    }
 
     int length() { return _insn_length(_raw); }
     bool isC(){return length() == 2;}
@@ -99,8 +71,12 @@ public:
     uint64_t rvc_rd() { return rd(); }
     uint64_t rvc_rs1() { return rd(); }
     uint64_t rvc_rs2() { return _getBits(2, 5); }
+    uint64_t rvc_rds() { return 8 + _getBits(2, 3); }
     uint64_t rvc_rs1s() { return 8 + _getBits(7, 3); }
     uint64_t rvc_rs2s() { return 8 + _getBits(2, 3); }
+    uint64_t rvc_op() {return _getBits(0, 2);}
+    uint64_t rvc_func3(){return _getBits(13, 3);}
+    uint64_t rvc_func4(){return _getBits(12, 4);}
 
     uint64_t rvc_lbimm() { return (_getBits(5, 1) << 1) + _getBits(6, 1); }
     uint64_t rvc_lhimm() { return (_getBits(5, 1) << 1); }

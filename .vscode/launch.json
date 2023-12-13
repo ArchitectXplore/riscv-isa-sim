@@ -6,7 +6,8 @@
             "request": "launch",
             "program": "/work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/build/playground/playground_main",
             "args": [
-                "rv64si-p-wfi",
+                "rv64ua-p-amoadd_d",
+                "--trace",
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

@@ -3,7 +3,9 @@
 #include "devices.h"
 #include "processor.h"
 #include "simif.h"
-// #include "sim.h"
+#ifndef SPIKE_ABSTRACT_PROCESSOR
+#include "sim.h"
+#endif
 #include "dts.h"
 
 clint_t::clint_t(const simif_t* sim, uint64_t freq_hz, bool real_time)

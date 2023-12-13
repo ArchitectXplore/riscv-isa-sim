@@ -1,8 +1,25 @@
-#include "./SpikeAbstractProcessor.hpp"
+#include "SpikeAbstractProcessor.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <cstring>
 namespace archXplore{
+std::unordered_map<reg_t, SpikeInstr::PtrType> SpikeInstr::_instrMap 
+    = std::unordered_map<reg_t, SpikeInstr::PtrType>();
+reg_t SpikeInstr::getXRegVal(const reg_t& reg){
+    reg_t ret;
+    _processor->getXpr(reg, ret);
+    return ret;
+}
+freg_t SpikeInstr::getFRegVal(const reg_t& reg){
+    freg_t ret;
+    _processor->getFpr(reg, ret);
+    return ret;
+}
+void SpikeInstr::setXRegVal(const reg_t& reg, const reg_t& val){_processor->setXpr(reg, val);}
+void SpikeInstr::setFRegVal(const reg_t& reg, const freg_t& val){_processor->setFpr(reg, val);}
+
+
+
 // * mem if
 void SpikeAbstractProcessor::sendMemReq(MemReq::PtrType req) {
     throw "unimpl!";
@@ -29,32 +46,41 @@ void SpikeAbstractProcessor::setPc(const reg_t& pc) {
     _processor->state.pc = pc;
 }
 
-void SpikeAbstractProcessor::get_xpr(const size_t& idx, reg_t& ret) const {
-    ret =  _processor->state.XPR[idx];
+void SpikeAbstractProcessor::getXpr(const size_t& idx, reg_t& ret) const {
+    ret = _xprf->get(idx);
+    // std::cout << "\tget xpr " << idx << ": " << ret << std::endl;
 }
-void SpikeAbstractProcessor::set_xpr(const size_t& idx, const reg_t& val) {
-    _processor->state.XPR.write(idx, val);
-}
-
-void SpikeAbstractProcessor::get_fpr(const size_t& idx, freg_t& ret) const {
-    ret =  _processor->state.FPR[idx];
-}
-void SpikeAbstractProcessor::set_fpr(const size_t& idx, const freg_t& val) {
-    _processor->state.FPR.write(idx, val);
+void SpikeAbstractProcessor::setXpr(const size_t& idx, const reg_t& val) {
+    // std::cout << "\twrite xpr " << idx << ": " << val << std::endl;
+    _xprf->write(idx, val);
 }
 
-void SpikeAbstractProcessor::get_csr(const reg_t& idx, reg_t& ret) const {
-    ret = _processor->state.csrmap[idx]->read();
+void SpikeAbstractProcessor::getFpr(const size_t& idx, freg_t& ret) const {
+    ret = _fprf->get(idx);
+    // std::cout << "\tget fpr " << idx << ": " << ret << std::endl;
 }
-void SpikeAbstractProcessor::try_get_csr(const reg_t& idx, reg_t& ret) const noexcept {
-    // if(auto it = _processor->state.csrmap.find(idx) != _processor->state.csrmap.end())
-    throw "unimpl!";
+void SpikeAbstractProcessor::setFpr(const size_t& idx, const freg_t& val) {
+    _fprf->write(idx, val);
+    // std::cout << "\twrite fpr " << idx << ": " << val << std::endl;
 }
-void SpikeAbstractProcessor::set_csr(const reg_t& idx, const reg_t& val) {
+
+void SpikeAbstractProcessor::getCsr(const reg_t& idx, reg_t& ret, InstrBase::PtrType instr) const {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    ret = _processor->get_csr(idx, ptr->instr, false, false);
+}
+void SpikeAbstractProcessor::peekCsr(const reg_t& idx, reg_t& ret) const noexcept {
+    ret = _processor->get_csr(idx, insn_t(0), false, true);
+}
+void SpikeAbstractProcessor::setCsr(const reg_t& idx, const reg_t& val, InstrBase::PtrType instr) {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    auto search = _processor->state.csrmap.find(idx);
+    if(search == _processor->state.csrmap.end())
+        throw "undefined csr idx";
+    search->second->verify_permissions(ptr->instr, true);
+    search->second->write(val);
+}
+void SpikeAbstractProcessor::touchCsr(const reg_t& idx, reg_t& val) const noexcept {
     _processor->state.csrmap[idx]->write(val);
-}
-void SpikeAbstractProcessor::try_set_csr(const reg_t& idx, reg_t& val) const noexcept {
-    throw "unimpl!";
 }
 void SpikeAbstractProcessor::backdoorWriteMIP(const uint64_t& mask, const uint64_t& val){
     _processor->state.mip->backdoor_write_with_mask(mask, val);
@@ -62,7 +88,12 @@ void SpikeAbstractProcessor::backdoorWriteMIP(const uint64_t& mask, const uint64
 void SpikeAbstractProcessor::syncTimer(const uint64_t& ticks){
      _processor->state.time->sync(ticks);
 }
-
+bool SpikeAbstractProcessor::isWaitingForInterrupt() const noexcept{
+    return _processor->in_wfi;
+}
+void SpikeAbstractProcessor::cleanWaitingForInterrupt() noexcept{
+    _processor->in_wfi = false;
+}
 
 
 
@@ -98,17 +129,20 @@ bool SpikeAbstractProcessor::step(const bool& trace_enable) {
     // * gen instr
     reg_t pc;
     getPc(pc);
-    if(pc == 0x80000198)
+    if(pc == 0x8000018c)
         std::cout << "debug enter" << std::endl;
     if(trace_enable)
         std::cout << std::hex << pc << ":\t";
-    auto instrPtr = archXplore::SpikeInstr::createInstr(pc);
+    auto instrPtr = createInstr(pc);
 
     // * handle interruption
     handleInterrupts(instrPtr);
     // * wfi 
-    if(unlikely(_processor->in_wfi))
+    if(unlikely(_processor->in_wfi)){
+        auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instrPtr);
+        SpikeInstr::commitInstr(ptr);
         return false;
+    }
 
     // * fetch 
     // actually this stage contian decode
@@ -137,6 +171,10 @@ bool SpikeAbstractProcessor::step(const bool& trace_enable) {
         execute(instrPtr);
     }
 
+    // * commit 
+    // actually it just delete the <insn, spikeptr> mapping
+    commit(instrPtr);
+
     // * handle wfi
     if(_processor->in_wfi){
         if(trace_enable)
@@ -152,14 +190,10 @@ bool SpikeAbstractProcessor::step(const bool& trace_enable) {
             std::cout << "  get exception: " << std::hex << instrPtr->ecause << std::endl;
         return !_processor->in_wfi;
     }
-    
-
-    // * wb
-    // this is only abled when macro ARCHXPLORE_WBSPLIT is defined
-    writeBack(instrPtr);
-
     // * get next pc
     advancePc(instrPtr);
+
+
     return true;
 }
 
@@ -209,13 +243,7 @@ void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) const {
     return;
 }  
 void SpikeAbstractProcessor::updateRename(InstrBase::PtrType instr) const {
-    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    ptr->instr.set_prd(ptr->prd());
-    ptr->instr.set_prs1(ptr->prs1());
-    ptr->instr.set_prs2(ptr->prs2());
-    ptr->instr.set_prs3(ptr->prs3());
-    if(ptr->rd() != 0)
-        _processor->state.XPR.updateArchToPhy(ptr->rd(), ptr->prd());
+    
 }  
 void SpikeAbstractProcessor::execute(InstrBase::PtrType instr) const {
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
@@ -223,13 +251,7 @@ void SpikeAbstractProcessor::execute(InstrBase::PtrType instr) const {
         std::cout << "Debug \n" << std::endl;
     }
     try{
-#ifndef ARCHXPLORE_WBSPLIT
         ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc);
-#else // ARCHXPLORE_WBSPLIT
-        std::optional<reg_t> xresult = std::nullopt;
-        std::optional<freg_t> fresult = std::nullopt;
-        ptr->npc = ptr->instr_func(_processor.get(), ptr->instr, ptr->pc, ptr->resultwb);
-#endif // ARCHXPLORE_WBSPLIT
         return;
     }
     catch(trap_t& t){
@@ -265,17 +287,9 @@ void SpikeAbstractProcessor::handleExceptions(InstrBase::PtrType instr) const{
         _processor->take_trigger_action(match->action, 0, _processor->state.pc, 0);
     return;
 }
-void SpikeAbstractProcessor::writeBack(InstrBase::PtrType instr) const{
-#ifdef ARCHXPLORE_WBSPLIT
+void SpikeAbstractProcessor::commit(InstrBase::PtrType instr) const{
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
-    if(ptr->resultwb.xresult != std::nullopt && ptr->resultwb.fresult != std::nullopt)
-        throw "xresult and fresult can not be BOTH valid";
-    if(ptr->resultwb.xresult != std::nullopt)
-        _processor->state.XPR.write(ptr->instr.rd(), ptr->resultwb.xresult.value());
-    if(ptr->resultwb.fresult != std::nullopt)
-        _processor->state.FPR.write(ptr->instr.rd(), ptr->resultwb.fresult.value());
-    return;
-#endif // ARCHXPLORE_WBSPLIT
+    SpikeInstr::commitInstr(ptr);
 }
 
 

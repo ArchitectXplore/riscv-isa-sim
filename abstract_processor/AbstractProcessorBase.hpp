@@ -1,3 +1,5 @@
+#ifndef __ABSTRACT_PROCESSOR_BASE__
+#define __ABSTRACT_PROCESSOR_BASE__
 #include "./util.hpp"
 #include <memory>
 
@@ -23,19 +25,21 @@ public:
     virtual void getPc(reg_t& ret) const = 0;
     virtual void setPc(const reg_t& pc) = 0;
     
-    virtual void get_xpr(const size_t& idx, reg_t& ret) const = 0;
-    virtual void set_xpr(const size_t& idx, const reg_t& val) = 0;
+    virtual void getXpr(const size_t& idx, reg_t& ret) const = 0;
+    virtual void setXpr(const size_t& idx, const reg_t& val) = 0;
 
-    virtual void get_fpr(const size_t& idx, freg_t& ret) const = 0;
-    virtual void set_fpr(const size_t& idx, const freg_t& val) = 0;
+    virtual void getFpr(const size_t& idx, freg_t& ret) const = 0;
+    virtual void setFpr(const size_t& idx, const freg_t& val) = 0;
 
-    virtual void get_csr(const reg_t& idx, reg_t& ret) const = 0;
-    virtual void try_get_csr(const reg_t& idx, reg_t& ret) const noexcept = 0;
-    virtual void set_csr(const reg_t& idx, const reg_t& val) = 0;
-    virtual void try_set_csr(const reg_t& idx, reg_t& val) const noexcept = 0;
+    virtual void getCsr(const reg_t& idx, reg_t& ret, InstrBase::PtrType instr) const = 0;
+    virtual void peekCsr(const reg_t& idx, reg_t& ret) const noexcept = 0;
+    virtual void setCsr(const reg_t& idx, const reg_t& val, InstrBase::PtrType instr) = 0;
+    virtual void touchCsr(const reg_t& idx, reg_t& val) const noexcept = 0;
 
     virtual void backdoorWriteMIP(const uint64_t& mask, const uint64_t& val) = 0;
     virtual void syncTimer(const uint64_t& ticks) = 0;
+    virtual bool isWaitingForInterrupt() const noexcept = 0;
+    virtual void cleanWaitingForInterrupt() noexcept = 0;
 
 
     // exe if
@@ -48,10 +52,11 @@ public:
     virtual void ptw(InstrBase::PtrType instr) const = 0;
     virtual void handleInterrupts(InstrBase::PtrType instr) const = 0;
     virtual void handleExceptions(InstrBase::PtrType instr) const = 0;
-    virtual void writeBack(InstrBase::PtrType instr) const = 0;
+    virtual void commit(InstrBase::PtrType instr) const = 0;
 protected:
     UncorePtr _uncore;
 };
 }
 
 
+#endif // __ABSTRACT_PROCESSOR_BASE__

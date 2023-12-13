@@ -5,7 +5,7 @@
 #include "rocc.h"
 #include "trap.h"
 #include <cstdlib>
-#ifndef ARCHXPLORE_WBSPLIT
+#ifndef SPIKE_ABSTRACT_PROCESSOR
 #define customX(n) \
   static reg_t c##n(processor_t* p, insn_t insn, reg_t pc) \
   { \
@@ -25,9 +25,9 @@
     illegal_instruction(); \
     return 0; \
   }
-#else // ARCHXPLORE_WBSPLIT
+#else //SPIKE_ABSTRACT_PROCESSOR
 #define customX(n) \
-  static reg_t c##n(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb) \
+static reg_t c##n(processor_t* p, const insn_t& insn, const reg_t& pc) \
   { \
     rocc_t* rocc = static_cast<rocc_t*>(p->get_extension()); \
     rocc_insn_union_t u; \
@@ -45,7 +45,7 @@
     illegal_instruction(); \
     return 0; \
   }
-#endif // ARCHXPLORE_WBSPLIT
+#endif //SPIKE_ABSTRACT_PROCESSOR
 
 customX(0)
 customX(1)

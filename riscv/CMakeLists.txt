@@ -31,6 +31,7 @@ target_link_libraries(riscv PRIVATE softfloat)
 target_include_directories(riscv PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(riscv PUBLIC ${CMAKE_SOURCE_DIR}/build)
 target_include_directories(riscv PUBLIC ${CMAKE_SOURCE_DIR}/softfloat)
+# target_include_directories(riscv PUBLIC ${CMAKE_SOURCE_DIR}/abstract_processor)
 target_include_directories(riscv PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/insns)
 
 find_library(DL_LIBRARY dl)

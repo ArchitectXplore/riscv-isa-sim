@@ -4,8 +4,7 @@
 #include "insn_macros.h"
 
 #define DECODE_MACRO_USAGE_LOGGED 0
-#ifndef ARCHXPLORE_WBSPLIT
-
+#ifndef SPIKE_ABSTRACT_PROCESSOR
 reg_t fast_rv32i_NAME(processor_t* p, insn_t insn, reg_t pc)
 {
   #define xlen 32
@@ -97,8 +96,12 @@ reg_t logged_rv64e_NAME(processor_t* p, insn_t insn, reg_t pc)
   #undef xlen
   return npc;
 }
-#else // ARCHXPLORE_WBSPLIT
-reg_t fast_rv32i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+
+
+#else //SPIKE_ABSTRACT_PROCESSOR
+
+
+reg_t fast_rv32i_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 32
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -108,7 +111,7 @@ reg_t fast_rv32i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
   return npc;
 }
 
-reg_t fast_rv64i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t fast_rv64i_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 64
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -121,7 +124,7 @@ reg_t fast_rv64i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
 #undef DECODE_MACRO_USAGE_LOGGED
 #define DECODE_MACRO_USAGE_LOGGED 1
 
-reg_t logged_rv32i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t logged_rv32i_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 32
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -131,7 +134,7 @@ reg_t logged_rv32i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultw
   return npc;
 }
 
-reg_t logged_rv64i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t logged_rv64i_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 64
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -147,7 +150,7 @@ reg_t logged_rv64i_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultw
 #undef DECODE_MACRO_USAGE_LOGGED
 #define DECODE_MACRO_USAGE_LOGGED 0
 
-reg_t fast_rv32e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t fast_rv32e_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 32
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -157,7 +160,7 @@ reg_t fast_rv32e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
   return npc;
 }
 
-reg_t fast_rv64e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t fast_rv64e_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 64
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -170,7 +173,7 @@ reg_t fast_rv64e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
 #undef DECODE_MACRO_USAGE_LOGGED
 #define DECODE_MACRO_USAGE_LOGGED 1
 
-reg_t logged_rv32e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t logged_rv32e_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 32
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -180,7 +183,7 @@ reg_t logged_rv32e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultw
   return npc;
 }
 
-reg_t logged_rv64e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultwb)
+reg_t logged_rv64e_NAME(processor_t* p, const insn_t& insn, const reg_t& pc)
 {
   #define xlen 64
   reg_t npc = sext_xlen(pc + insn_length(OPCODE));
@@ -189,4 +192,4 @@ reg_t logged_rv64e_NAME(processor_t* p, insn_t insn, reg_t pc, ResultWB& resultw
   #undef xlen
   return npc;
 }
-#endif // ARCHXPLORE_WBSPLIT
+#endif
