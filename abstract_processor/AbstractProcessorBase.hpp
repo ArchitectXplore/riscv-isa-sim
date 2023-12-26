@@ -34,7 +34,7 @@ public:
     virtual void getCsr(const reg_t& idx, reg_t& ret, InstrBase::PtrType instr) const = 0;
     virtual void peekCsr(const reg_t& idx, reg_t& ret) const noexcept = 0;
     virtual void setCsr(const reg_t& idx, const reg_t& val, InstrBase::PtrType instr) = 0;
-    virtual void touchCsr(const reg_t& idx, reg_t& val) const noexcept = 0;
+    virtual void touchCsr(const reg_t& idx, reg_t& val) noexcept = 0;
 
     virtual void backdoorWriteMIP(const uint64_t& mask, const uint64_t& val) = 0;
     virtual void syncTimer(const uint64_t& ticks) = 0;
@@ -43,16 +43,22 @@ public:
 
 
     // exe if
-    virtual void reset() const = 0;
-    virtual void checkInterrupt(InstrBase::PtrType instr) const = 0;
-    virtual void decode(InstrBase::PtrType instr) const = 0;  
-    virtual void updateRename(InstrBase::PtrType instr) const = 0;  
-    virtual void execute(InstrBase::PtrType instr) const = 0;
-    virtual void fetch(InstrBase::PtrType instr) const = 0;
-    virtual void ptw(InstrBase::PtrType instr) const = 0;
-    virtual void handleInterrupts(InstrBase::PtrType instr) const = 0;
-    virtual void handleExceptions(InstrBase::PtrType instr) const = 0;
-    virtual void commit(InstrBase::PtrType instr) const = 0;
+    virtual void reset()  = 0;
+    virtual void checkInterrupt(InstrBase::PtrType instr)  = 0;
+    virtual void decode(InstrBase::PtrType instr)  = 0;  
+    virtual void updateRename(InstrBase::PtrType instr)  = 0;  
+    virtual void execute(InstrBase::PtrType instr)  = 0;
+    virtual void fetch(InstrBase::PtrType instr)  = 0;
+    virtual void ptw(InstrBase::PtrType instr)  = 0;
+    virtual void pmpCheck(InstrBase::PtrType instr)  = 0;
+    virtual void checkPermission(InstrBase::PtrType instr)  = 0;
+    virtual void addrGenForMem(InstrBase::PtrType instr)  = 0;
+    virtual void getStoreData(InstrBase::PtrType instr)  = 0;
+    virtual void load(InstrBase::PtrType instr)  = 0;
+    virtual void store(InstrBase::PtrType instr)  = 0;
+    virtual void handleInterrupts(InstrBase::PtrType instr)  = 0;
+    virtual void handleExceptions(InstrBase::PtrType instr)  = 0;
+    virtual void commit(InstrBase::PtrType instr)  = 0;
 protected:
     UncorePtr _uncore;
 };

@@ -6,7 +6,7 @@
             "request": "launch",
             "program": "/work/stu/pguo/code/ArchXplore/ext/riscv-isa-sim/build/playground/playground_main",
             "args": [
-                "rv64ua-p-amoadd_d",
+                "rv64mi-p-csr",
                 "--trace",
             ],
             "stopAtEntry": false,

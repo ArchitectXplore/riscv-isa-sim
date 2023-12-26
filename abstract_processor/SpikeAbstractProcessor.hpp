@@ -7,7 +7,9 @@
 #include "../riscv/processor.h"
 #include "../riscv/mmu.h"
 #include "../riscv/devices.h"
+#include "spike_cfg.hpp"
 #include <memory>
+#include <cmath>
 #include "../riscv/decode_macros.h"
 namespace archXplore{
 static const size_t INTERLEAVE = 5000;
@@ -17,7 +19,6 @@ class SpikeInstr: public RVInstrBase{
 public:
     friend class SpikeAbstractProcessor;
     using PtrType = std::shared_ptr<SpikeInstr>;
-    using InstrBase::pc;
     // exception 
     using InstrBase::evalid;
     using InstrBase::ecause;
@@ -26,14 +27,32 @@ public:
     // exec result
     using InstrBase::npc;
 
-    insn_t instr;
-    insn_func_t instr_func; 
+    insn_t instr;   // spike insn. for mapping
+    insn_func_t instr_func; // spike insn function. For execution
 
+    // fetch
+    using InstrBase::pc; // pc
+    reg_t pc_page; // pc page
+    reg_t pc_paddr; // pc paddr
+    reg_t fetch_len = 32/8; 
+    bool isFetched = false;
+
+    // load/store
+    reg_t mem_addr = 0; //memory operation vaddr
+    reg_t mem_page = 0; //memory operation paddr
+    reg_t mem_paddr = 0;
+    reg_t mem_len = 1; // memory operation len
+    uint8_t mem_data[8];
+
+
+    // cfg
+    // reg_t page_size = 0;
 
     SpikeInstr(const reg_t& pc, SpikeAbstractProcessor* ptr){
         _processor = ptr;
         this->pc = pc;
-        instr = insn_t(pc);
+        instr = insn_t(0);
+        memset(&mem_data, 0, sizeof(mem_data));
     }
     void setAllPrgeAsAreg(){
         _prd = rd();
@@ -98,17 +117,23 @@ private:
     std::shared_ptr<FakeRegFile<freg_t>> _fprf;
 public:
     using AbstractProcessorBase::UncorePtr;
-    SpikeAbstractProcessor(const isa_parser_t *isa, const cfg_t *cfg,
+    reg_t page_size;
+    reg_t page_shift;
+    bool trace_enable;
+    SpikeAbstractProcessor(const isa_parser_t *isa, const SpikeCfg *cfg,
                             uint32_t id, bool halt_on_reset,
                          FILE* log_file, std::ostream& sout_,
                          UncorePtr uncore,
                          std::shared_ptr<FakeRegFile<reg_t>> xprf,
-                         std::shared_ptr<FakeRegFile<freg_t>> fprf
+                         std::shared_ptr<FakeRegFile<freg_t>> fprf,
+                         bool trace_on
                          ):
                          _processor(std::make_shared<processor_t>(isa, cfg, this, id, halt_on_reset, log_file, sout_)),
                          AbstractProcessorBase(uncore),
                          _xprf(xprf),
-                         _fprf(fprf)
+                         _fprf(fprf),
+                         page_size(cfg->page_size),
+                         trace_enable(trace_on)
     {
         _harts[0] = _processor.get();
         debug_mmu = new mmu_t(this, cfg->endianness, nullptr);
@@ -117,6 +142,8 @@ public:
             0, // freq_hz not important when realtime is false
             false // realtime
         ));
+        page_shift = (reg_t) std::log2(page_size);
+        
     }
     ~SpikeAbstractProcessor(){
         delete debug_mmu;
@@ -140,14 +167,41 @@ public:
         for(auto device : _devices)
             device->tick(time);
     }
-    bool step(const bool& trace_enable);
-    void run(const bool& trace_enable, const reg_t& interval);
+    bool step();
+    void run( const reg_t& interval);
     std::shared_ptr<SpikeInstr> createInstr(const reg_t & pc){
         auto ptr = std::make_shared<SpikeInstr>(pc, this);
         SpikeInstr::_add_map(ptr->instr, ptr);
+        if(trace_enable)
+            printf("pc:%016llx\t", pc);
         return ptr;
     }
-
+    void retireInstr(InstrBase::PtrType instr){
+        auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+        SpikeInstr::commitInstr(ptr);
+        if(trace_enable)
+            printf("\n");
+    }
+    inline void throwExceptionIfFalse(SpikeInstr::PtrType instr, const bool& flag){
+        if(unlikely(!flag)){
+            throw trap_illegal_instruction(instr->getRaw());
+        }
+    }
+    inline void checkExtension(SpikeInstr::PtrType instr, const unsigned char& ext){
+        throwExceptionIfFalse(instr, _processor->extension_enabled(ext));
+    }
+    inline void requireFp(SpikeInstr::PtrType instr){
+        _processor->state.fflags->verify_permissions(instr->instr, false);
+    }
+    inline void requireFs(SpikeInstr::PtrType instr){
+        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_FS));
+    }
+    inline void requireAccelerator(SpikeInstr::PtrType instr){
+        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_XS));
+    }
+    inline void requireVs(SpikeInstr::PtrType instr){
+        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_VS));
+    }
     // * from AbstractProcessorBase
     virtual void sendMemReq(MemReq::PtrType)  override final;
     virtual void recieveMemResp(MemResp::PtrType)  override final;
@@ -172,7 +226,7 @@ public:
     virtual void getCsr(const reg_t& idx, reg_t& ret, InstrBase::PtrType instr) const  override final;
     virtual void peekCsr(const reg_t& idx, reg_t& ret) const noexcept  override final;
     virtual void setCsr(const reg_t& idx, const reg_t& val, InstrBase::PtrType instr)  override final;
-    virtual void touchCsr(const reg_t& idx, reg_t& val) const noexcept  override final;
+    virtual void touchCsr(const reg_t& idx, reg_t& val) noexcept  override final;
 
     virtual void backdoorWriteMIP(const uint64_t& mask, const uint64_t& val) override final;
     virtual void syncTimer(const uint64_t& ticks) override final;
@@ -180,16 +234,23 @@ public:
     virtual void cleanWaitingForInterrupt() noexcept override final;
 
     // exe if
-    virtual void reset() const override final;
-    virtual void fetch(InstrBase::PtrType instr) const override final;
-    virtual void checkInterrupt(InstrBase::PtrType instr) const override final;  
-    virtual void decode(InstrBase::PtrType instr) const override final;  
-    virtual void updateRename(InstrBase::PtrType instr) const override final;  
-    virtual void execute(InstrBase::PtrType instr) const  override final; 
-    virtual void ptw(InstrBase::PtrType instr) const override final;
-    virtual void handleInterrupts(InstrBase::PtrType instr) const override final;
-    virtual void handleExceptions(InstrBase::PtrType instr) const override final;
-    virtual void commit(InstrBase::PtrType instr) const override final;
+    virtual void reset() override final;
+    virtual void checkInterrupt(InstrBase::PtrType instr) override final;  
+    virtual void decode(InstrBase::PtrType instr) override final;  
+    virtual void updateRename(InstrBase::PtrType instr) override final;  
+    virtual void execute(InstrBase::PtrType instr)  override final; 
+    virtual void checkPermission(InstrBase::PtrType instr) override final; 
+    virtual void addrGenForMem(InstrBase::PtrType instr) override final;
+    virtual void getStoreData(InstrBase::PtrType instr) override final;
+    virtual void ptw(InstrBase::PtrType instr) override final;
+    virtual void pmpCheck(InstrBase::PtrType instr) override final;
+    // TODO: actually there are pmo checks in ptw, it is implicitly
+    virtual void fetch(InstrBase::PtrType instr) override final;
+    virtual void load(InstrBase::PtrType instr) override final;
+    virtual void store(InstrBase::PtrType instr) override final;
+    virtual void handleInterrupts(InstrBase::PtrType instr) override final;
+    virtual void handleExceptions(InstrBase::PtrType instr) override final;
+    virtual void commit(InstrBase::PtrType instr) override final;
 
     // simif.h
     virtual char* addr_to_mem(reg_t paddr) override final;

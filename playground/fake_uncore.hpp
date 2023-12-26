@@ -10,27 +10,27 @@ class FakeUncore:public archXplore::MemIf::UncoreIf{
 public:
     struct MemChunk{
         std::string name = "default";
-        uint64_t paddr;
+        uint64_t base;
         uint64_t size;
         char* mem;
         char* getMem(const uint64_t& addr, const uint64_t& s){
-            if(addr < paddr || paddr + size <= addr+s ){
+            if(addr < base || base + size <= addr+s ){
                 std::stringstream ss;
                 ss << "Bad addr access:";
                 ss << "addr " << std::hex << addr << " ";
                 ss << "size " << std::hex << s << " ";
                 ss << "@ memchunk: " << name << " ";
-                ss << "paddr " << std::hex << paddr << " ";
+                ss << "base " << std::hex << base << " ";
                 ss << "size " << std::hex << size << " ";
                 throw ss.str();
             }
-            return mem + (addr - paddr);
+            return mem + (addr - base);
         }
         bool hit(const uint64_t& addr, const uint64_t& s){
-            return (paddr <= addr) && (addr + s < paddr + size);
+            return (base <= addr) && (addr + s < base + size);
         }
         MemChunk(const mem_cfg_t& cfg){
-            paddr = cfg.get_base();
+            base = cfg.get_base();
             size = cfg.get_size();
             mem = new char[size];
             memset(mem, 0, size);
