@@ -54,6 +54,7 @@ public:
     virtual void checkPermission(InstrBase::PtrType instr)  = 0;
     virtual void addrGenForMem(InstrBase::PtrType instr)  = 0;
     virtual void getStoreData(InstrBase::PtrType instr)  = 0;
+    virtual void amo(InstrBase::PtrType instr)  = 0;
     virtual void load(InstrBase::PtrType instr)  = 0;
     virtual void store(InstrBase::PtrType instr)  = 0;
     virtual void handleInterrupts(InstrBase::PtrType instr)  = 0;

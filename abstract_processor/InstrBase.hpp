@@ -39,11 +39,30 @@ public:
 
     int length() const { return _insn_length(_raw); }
     bool isC()const {return length() == 2;}
+    int memLen()const{
+        if(isLd() || isSt() || isFLd() || isFSt() || isAmo() ||
+            isOp() || isOpI()
+        ){
+            return 1 << (funct3() & 0b11);
+        }
+        else if(isHlv() || isHsv()){
+            return 1 << ((funct7() >> 1) & 0b11); // funct7[1:3]
+        }
+        else {
+            return 0;
+        }
+    }
     bool isMemOperation() const{
         return isSt() || isLd() || 
                 isFLd() || isFSt() ||
                 isAmo() ||
                 isHsv() || isHlv();
+    }
+    bool isOpI() const{
+        return opcode() == 0b0010011;
+    }
+    bool isOp() const{
+        return opcode() == 0b0110011;
     }
     bool isLoad() const{
         return isLd() || isFLd() || isHlv() || isLR();
@@ -100,6 +119,36 @@ public:
     bool isLR() const{
         return isAmo() && rs2() == 0 && amo_funct5() == 0b00010;
     } // load reserve
+    bool isSC() const{
+        return isAmo() && amo_funct5() == 0b00011;
+    }
+    bool isAmoSwap() const{
+        return isAmo() && amo_funct5() == 0b00001;
+    }
+    bool isAmoAdd() const{
+        return isAmo() && amo_funct5() == 0b00000;
+    }
+    bool isAmoXor() const{
+        return isAmo() && amo_funct5() == 0b00100;
+    }
+    bool isAmoAnd() const{
+        return isAmo() && amo_funct5() == 0b01100;
+    }
+    bool isAmoOr() const{
+        return isAmo() && amo_funct5() == 0b01000;
+    }
+    bool isAmoMin() const{
+        return isAmo() && amo_funct5() == 0b10000;
+    }
+    bool isAmoMax() const{
+        return isAmo() && amo_funct5() == 0b10100;
+    }
+    bool isAmoMinU() const{
+        return isAmo() && amo_funct5() == 0b11000;
+    }
+    bool isAmoMaxU() const{
+        return isAmo() && amo_funct5() == 0b11100;
+    }
     //TODO: h extension is not naively implemeted
     bool isHlvx() const{
         return isHlv() && rs2() == 0b00011;

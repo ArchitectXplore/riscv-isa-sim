@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <cstring>
+#include <algorithm> 
 #include "../riscv/decode.h"
 #include "../riscv/decode_macros.h"
 #include "../fesvr/byteorder.h"
@@ -56,6 +57,8 @@ void SpikeAbstractProcessor::getXpr(const size_t& idx, reg_t& ret) const {
 }
 void SpikeAbstractProcessor::setXpr(const size_t& idx, const reg_t& val) {
     // std::cout << "\twrite xpr " << idx << ": " << val << std::endl;
+    if(trace_enable)
+        printf("%016llx -> x%d", val, idx);
     _xprf->write(idx, val);
 }
 
@@ -64,6 +67,8 @@ void SpikeAbstractProcessor::getFpr(const size_t& idx, freg_t& ret) const {
     // std::cout << "\tget fpr " << idx << ": " << ret << std::endl;
 }
 void SpikeAbstractProcessor::setFpr(const size_t& idx, const freg_t& val) {
+    if(trace_enable)
+        printf("%016llf -> f%d", val, idx);
     _fprf->write(idx, val);
     // std::cout << "\twrite fpr " << idx << ": " << val << std::endl;
 }
@@ -169,14 +174,17 @@ bool SpikeAbstractProcessor::step() {
 
     // * exe 
     if(likely(!instrPtr->evalid)){
-		if(instrPtr->isLd() || instrPtr->isSt() || instrPtr->isFLd() || instrPtr->isFSt()){
+		if(instrPtr->isLd() || instrPtr->isSt() || 
+            instrPtr->isFLd() || instrPtr->isFSt() ||
+            instrPtr->isAmo()
+            ){
             if(likely(!instrPtr->evalid)){
                 checkPermission(instrPtr);
             }
     		if(likely(!instrPtr->evalid))
 				addrGenForMem(instrPtr);
 
-			if(likely(!instrPtr->evalid) && (instrPtr->isSt() || instrPtr->isFSt()))
+			if(likely(!instrPtr->evalid) && (instrPtr->isSt() || instrPtr->isFSt() || instrPtr->isAmo()))
 				getStoreData(instrPtr);
 
     		if(likely(!instrPtr->evalid))
@@ -189,6 +197,9 @@ bool SpikeAbstractProcessor::step() {
 				store(instrPtr);
     		else if(likely(!instrPtr->evalid) && (instrPtr->isLd() || instrPtr->isFLd()))
 				load(instrPtr);
+            else if(likely(!instrPtr->evalid) && (instrPtr->isAmo())){
+                amo(instrPtr);
+            }
 
     		if(likely(!instrPtr->evalid))
 				instrPtr->npc = instrPtr->pc + 4; // ! not for c
@@ -237,16 +248,7 @@ void SpikeAbstractProcessor::decode(InstrBase::PtrType instr) {
     try{
         ptr->instr_func = _processor->decode_insn(ptr->getRaw());
 
-        //mem_len init 
-        if(ptr->isLd() || ptr->isSt() || ptr->isFLd() || ptr->isFSt() || ptr->isAmo()){
-            ptr->mem_len = 1 << (ptr->funct3() & 0b11);
-        }
-        else if(ptr->isHlv() || ptr->isHsv()){
-            ptr->mem_len = 1 << ((ptr->funct7() >> 1) & 0b11); // funct7[1:3]
-        }
-        else {
-            ptr->mem_len = 0;
-        }
+        
         return;
     }
     catch(trap_t& t){
@@ -284,7 +286,7 @@ void SpikeAbstractProcessor::getStoreData(InstrBase::PtrType instr){
 		getFpr(ptr->rs2(), val);
 		memcpy(&ptr->mem_data, (char*)&val.v[0], sizeof(ptr->mem_data));
     }
-	else if(ptr->isSt() || ptr->isHsv()){
+	else if(ptr->isSt() || ptr->isHsv() || ptr->isAmo()){
 		reg_t val;
 		getXpr(ptr->rs2(), val);
 		memcpy(&ptr->mem_data, (char*)&val, sizeof(ptr->mem_data));
@@ -293,14 +295,23 @@ void SpikeAbstractProcessor::getStoreData(InstrBase::PtrType instr){
 void SpikeAbstractProcessor::checkPermission(InstrBase::PtrType instr){
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     try{
+        processor_t* p = _processor.get();
+        insn_t insn = ptr->instr;
+        reg_t pc = ptr->pc;
         if(ptr->isF()){
             if(ptr->isSingle()){
-                checkExtension(ptr, 'F');
+                require_extension('F');
             }
             else if(ptr->isDouble()){
-                checkExtension(ptr, 'D');
+                require_extension('D');
             }
-            requireFp(ptr);
+            require_fp;
+        }
+        else if(ptr->isAmo()){
+            require_extension('A');
+        }
+        if(ptr->memLen() == 8){
+            // require_rv64;
         }
     }
     catch(trap_t& t){
@@ -383,7 +394,7 @@ void SpikeAbstractProcessor::pmpCheck(InstrBase::PtrType instr) {
 			auto mem_access_info = _processor->mmu->generate_access_info(ptr->mem_addr, LOAD, 
                     {ptr->isHlv(), ptr->isHlvx(), ptr->isLR()});
             if(!_processor->mmu->pmp_ok(ptr->mem_paddr,
-                    ptr->mem_len, LOAD, (reg_t)mem_access_info.effective_virt)){
+                    ptr->memLen(), LOAD, (reg_t)mem_access_info.effective_virt)){
                 trap_t t = trap_load_access_fault(_processor->state.v, ptr->mem_addr, 0, 0);
                 setException(ptr, t);
             }
@@ -392,7 +403,7 @@ void SpikeAbstractProcessor::pmpCheck(InstrBase::PtrType instr) {
 			auto mem_access_info = _processor->mmu->generate_access_info(ptr->mem_addr, STORE, 
                         {ptr->isHsv(), false, false});
             if(!_processor->mmu->pmp_ok(ptr->mem_paddr,
-                    ptr->mem_len, STORE, (reg_t)mem_access_info.effective_virt)){
+                    ptr->memLen(), STORE, (reg_t)mem_access_info.effective_virt)){
                 trap_t t = trap_store_access_fault(_processor->state.v, ptr->mem_addr, 0, 0);
                 setException(ptr, t);
             }
@@ -453,6 +464,96 @@ void SpikeAbstractProcessor::fetch(InstrBase::PtrType instr){
     }
     return; 
 }
+void SpikeAbstractProcessor::amo(InstrBase::PtrType instr, amoFunc funct){
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    reg_t rs2 = *((reg_t*)&ptr->mem_data);
+    memset((char*)&ptr->mem_data, 0, sizeof(ptr->mem_data));
+    load(instr);
+    reg_t old_data = *((reg_t*)&ptr->mem_data);
+    reg_t ret = funct(old_data, rs2);
+    memset((char*)&ptr->mem_data, 0, sizeof(ptr->mem_data));
+    memcpy((char*)&ptr->mem_data, (char*)&ret, ptr->memLen());
+    store(instr);
+    memset((char*)&ptr->mem_data, 0, sizeof(ptr->mem_data));
+    memcpy((char*)&ptr->mem_data, (char*)&old_data, ptr->memLen());
+}
+void SpikeAbstractProcessor::amo(InstrBase::PtrType instr) {
+    auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
+    if(ptr->isAmoAdd()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return old_data + rs2;
+        });
+    }
+    else if(ptr->isAmoSwap()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return rs2;
+        });
+    }
+    else if(ptr->isAmoAnd()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return old_data & rs2;
+        });
+    }
+    else if(ptr->isAmoOr()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return old_data | rs2;
+        });
+    }
+    else if(ptr->isAmoXor()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return old_data ^ rs2;
+        });
+    } 
+    else if(ptr->isAmoMin()){
+        if(ptr->memLen() == 8){
+            amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+                return std::min((int64_t)old_data, (int64_t)rs2);
+            });
+        }
+        else{
+            amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+                return std::min((int32_t)old_data, (int32_t)rs2);
+            });
+        }
+        
+    }
+    else if(ptr->isAmoMinU()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return std::min(old_data, rs2);
+        });
+    }
+    else if(ptr->isAmoMax()){
+        if(ptr->memLen() == 8){
+            amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+                return std::max((int64_t)old_data, (int64_t)rs2);
+            });
+        }
+        else{
+            amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+                return std::max((int32_t)old_data, (int32_t)rs2);
+            });
+        }
+    }
+    else if(ptr->isAmoMaxU()){
+        amo(instr, [](const reg_t& old_data, const reg_t& rs2) -> reg_t{
+            return std::max(old_data, rs2);
+        });
+    }
+    // TODO: amocas
+    else if(ptr->isLR()){
+        load(instr);
+    }
+    else if(ptr->isSC()){
+        bool have_reservation = _processor->mmu->check_load_reservation(ptr->mem_addr, 
+            ptr->memLen());
+        if(have_reservation)
+            store(instr);
+        _processor->mmu->yield_load_reservation();
+        memset((char*)&ptr->mem_data, 0, sizeof(ptr->mem_data));
+        ptr->mem_data[0] = (uint8_t)!have_reservation;
+    }
+
+}
 void SpikeAbstractProcessor::load(InstrBase::PtrType instr) {
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     auto mem_access_info = _processor->mmu->generate_access_info(ptr->mem_addr, LOAD, 
@@ -462,13 +563,13 @@ void SpikeAbstractProcessor::load(InstrBase::PtrType instr) {
         setException(ptr, t);
     }
     if (auto host_addr = addr_to_mem(ptr->mem_paddr)) {
-		memcpy((char*)&ptr->mem_data, host_addr, ptr->mem_len);
+		memcpy((char*)&ptr->mem_data, host_addr, ptr->memLen());
         if (_processor->mmu->tracer.interested_in_range(ptr->mem_paddr, 
                 ptr->mem_paddr + page_size, LOAD))
-            _processor->mmu->tracer.trace(ptr->mem_paddr, ptr->mem_len, LOAD);
+            _processor->mmu->tracer.trace(ptr->mem_paddr, ptr->memLen(), LOAD);
         else if (!mem_access_info.flags.is_special_access())
             _processor->mmu->refill_tlb(ptr->mem_addr, ptr->mem_paddr, host_addr, LOAD);
-    } else if (!mmio_load(ptr->mem_paddr, ptr->mem_len, (uint8_t*)&ptr->mem_data)) {
+    } else if (!mmio_load(ptr->mem_paddr, ptr->memLen(), (uint8_t*)&ptr->mem_data)) {
         trap_t t = trap_load_access_fault(mem_access_info.effective_virt, ptr->mem_paddr, 0, 0);
         setException(ptr, t);
     }
@@ -477,20 +578,20 @@ void SpikeAbstractProcessor::load(InstrBase::PtrType instr) {
         _processor->mmu->load_reservation_address = ptr->mem_paddr;
     }
     if(trace_enable)
-        printf("load mem %016llx(p:%016llx) : %016llx", ptr->mem_addr, ptr->mem_paddr, *((uint64_t*)(&ptr->mem_data)));
+        printf("load mem %016llx(p:%016llx) : %016llx\t", ptr->mem_addr, ptr->mem_paddr, *((uint64_t*)(&ptr->mem_data)));
 }
 void SpikeAbstractProcessor::store(InstrBase::PtrType instr){
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
     auto mem_access_info = _processor->mmu->generate_access_info(ptr->mem_addr, STORE, 
             {ptr->isHsv(), false, false});
     if (auto host_addr = addr_to_mem(ptr->mem_paddr)) {
-        memcpy(host_addr, (char*)&ptr->mem_data, ptr->mem_len);
+        memcpy(host_addr, (char*)&ptr->mem_data, ptr->memLen());
         if (_processor->mmu->tracer.interested_in_range(ptr->mem_paddr, 
                 ptr->mem_paddr + page_size, STORE))
-            _processor->mmu->tracer.trace(ptr->mem_paddr, ptr->mem_len, STORE);
+            _processor->mmu->tracer.trace(ptr->mem_paddr, ptr->memLen(), STORE);
         else if (!mem_access_info.flags.is_special_access())
             _processor->mmu->refill_tlb(ptr->mem_addr, ptr->mem_paddr, host_addr, STORE);
-    } else if (!mmio_store(ptr->mem_paddr, ptr->mem_len, (uint8_t*)&ptr->mem_data)) {
+    } else if (!mmio_store(ptr->mem_paddr, ptr->memLen(), (uint8_t*)&ptr->mem_data)) {
         trap_t t = trap_store_access_fault(mem_access_info.effective_virt, ptr->mem_addr, 0, 0);
         setException(ptr, t);
     }
@@ -521,45 +622,52 @@ void SpikeAbstractProcessor::commit(InstrBase::PtrType instr){
     auto ptr = std::dynamic_pointer_cast<SpikeInstr>(instr);
 	if(ptr->isLd()){
 		reg_t res = *((uint64_t*)&ptr->mem_data);
-		if(!ptr->isFLd()){ // not float
-			if(!ptr->isLoadUnsigned()){ // not unsigned
-				if(ptr->mem_len == 1){ // lb
-					if((res & 0x80) == 0x80){
-						res |= 0xffffffffffffff00;
-					}
-				}
-				else if(ptr->mem_len == 2){// lh
-					if((res & 0x8000) == 0x8000){
-						res |= 0xffffffffffff0000;
-					}
-				}
-				else if(ptr->mem_len == 4){ // lw
-					if((res & 0x80000000) == 0x80000000){
-						res |= 0xffffffff00000000;
-					}
-				}
-			}
-		}
+        if(!ptr->isLoadUnsigned()){ // not unsigned
+            if(ptr->memLen() == 1){ // lb
+                res &= RV64_BYTE_MASK;
+                if((res & RV64_BYTE_HIGHEST) == RV64_BYTE_HIGHEST){
+                    res |= RV64_BYTE_MASK_R;
+                }
+            }
+            else if(ptr->memLen() == 2){// lh
+                res &= RV64_HALF_MASK;
+                if((res & RV64_HALF_HIGHEST) == RV64_HALF_HIGHEST){
+                    res |= RV64_HALF_MASK_R;
+                }
+            }
+            else if(ptr->memLen() == 4){ // lw
+                res &= RV64_WORD_MASK;
+                if((res & RV64_WORD_HIGHEST) == RV64_WORD_HIGHEST){
+                    res |= RV64_WORD_MASK_R;
+                }
+            }
+        }
 		setXpr(ptr->rd(), res);
-        if(trace_enable)
-            printf("-> x%d", ptr->rd());
 	}
 	else if(ptr->isFLd()){
-        if (ptr->mem_len == 2){
+        if (ptr->memLen() == 2){
 		    setFpr(ptr->rd(), freg(f16(*((uint16_t*)&ptr->mem_data))));
         }
-        else if (ptr->mem_len == 4){
+        else if (ptr->memLen() == 4){
 		    setFpr(ptr->rd(), freg(f32(*((uint32_t*)&ptr->mem_data))));
         }
-        else if (ptr->mem_len == 8){
+        else if (ptr->memLen() == 8){
 		    setFpr(ptr->rd(), freg(f64(*((uint64_t*)&ptr->mem_data))));
         }
         else{
             throw "unexcepted case in fload commit";
         }
-        if(trace_enable)
-            printf("-> f%d", ptr->rd());
 	}
+    else if(ptr->isAmo()){
+        reg_t res = *((uint64_t*)&ptr->mem_data);
+        if(ptr->memLen() == 4){ // amo.w
+            res &= RV64_WORD_MASK;
+                if((res & RV64_WORD_HIGHEST) == RV64_WORD_HIGHEST){
+                    res |= RV64_WORD_MASK_R;
+                }
+        }
+		setXpr(ptr->rd(), res);
+    }
 }
 
 

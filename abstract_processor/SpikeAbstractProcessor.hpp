@@ -11,6 +11,7 @@
 #include <memory>
 #include <cmath>
 #include "../riscv/decode_macros.h"
+#include <functional>
 namespace archXplore{
 static const size_t INTERLEAVE = 5000;
 static const size_t INSNS_PER_RTC_TICK = 100; // 10 MHz clock for 1 BIPS core
@@ -41,7 +42,6 @@ public:
     reg_t mem_addr = 0; //memory operation vaddr
     reg_t mem_page = 0; //memory operation paddr
     reg_t mem_paddr = 0;
-    reg_t mem_len = 1; // memory operation len
     uint8_t mem_data[8];
 
 
@@ -182,26 +182,6 @@ public:
         if(trace_enable)
             printf("\n");
     }
-    inline void throwExceptionIfFalse(SpikeInstr::PtrType instr, const bool& flag){
-        if(unlikely(!flag)){
-            throw trap_illegal_instruction(instr->getRaw());
-        }
-    }
-    inline void checkExtension(SpikeInstr::PtrType instr, const unsigned char& ext){
-        throwExceptionIfFalse(instr, _processor->extension_enabled(ext));
-    }
-    inline void requireFp(SpikeInstr::PtrType instr){
-        _processor->state.fflags->verify_permissions(instr->instr, false);
-    }
-    inline void requireFs(SpikeInstr::PtrType instr){
-        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_FS));
-    }
-    inline void requireAccelerator(SpikeInstr::PtrType instr){
-        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_XS));
-    }
-    inline void requireVs(SpikeInstr::PtrType instr){
-        throwExceptionIfFalse(instr,  _processor->state.sstatus->enabled(SSTATUS_VS));
-    }
     // * from AbstractProcessorBase
     virtual void sendMemReq(MemReq::PtrType)  override final;
     virtual void recieveMemResp(MemResp::PtrType)  override final;
@@ -246,6 +226,9 @@ public:
     virtual void pmpCheck(InstrBase::PtrType instr) override final;
     // TODO: actually there are pmo checks in ptw, it is implicitly
     virtual void fetch(InstrBase::PtrType instr) override final;
+    using amoFunc = std::function<uint64_t(const uint64_t&, const uint64_t&)>;
+    void amo(InstrBase::PtrType instr, amoFunc funct);
+    virtual void amo(InstrBase::PtrType instr) override final;
     virtual void load(InstrBase::PtrType instr) override final;
     virtual void store(InstrBase::PtrType instr) override final;
     virtual void handleInterrupts(InstrBase::PtrType instr) override final;

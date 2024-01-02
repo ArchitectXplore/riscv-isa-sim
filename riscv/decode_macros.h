@@ -11,6 +11,7 @@
 #include "../softfloat/specialize.h"
 #ifdef SPIKE_ABSTRACT_PROCESSOR
 #include "../abstract_processor/SpikeAbstractProcessor.hpp"
+#include "insn_macros.h"
 #endif // SPIKE_ABSTRACT_PROCESSOR
 
 // helpful macros, etc
